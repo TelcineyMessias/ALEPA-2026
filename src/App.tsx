@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  AlertCircle,
   BarChart3,
   Bell,
   BookOpen,
@@ -10,7 +9,8 @@ import {
   Headphones,
   Home,
   LogOut,
-  RefreshCw,
+  Users,
+  Video,
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AuthView } from './components/AuthView';
@@ -21,7 +21,9 @@ import { SimuladosView } from './components/SimuladosView';
 import { ErrorNotebookView } from './components/ErrorNotebookView';
 import { MaterialsView } from './components/MaterialsView';
 import { PodcastsView } from './components/PodcastsView';
+import { VideosView } from './components/VideosView';
 import { PerformanceView } from './components/PerformanceView';
+import { FamilyAccessView } from './components/FamilyAccessView';
 import { OfflineIndicator, PWAInstallButton } from './components/PWAInstallButton';
 import { CONCURSO_PROFILE, formatDateKey } from './data/alepaSyllabus';
 import { useStudyAlert } from './hooks/useStudyAlert';
@@ -38,9 +40,31 @@ function CampusShell() {
     syncError,
     clearSyncError,
     studySessions,
+    updateAccessPresenceContext,
   } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<NavSection>('dashboard');
+  const [activeTab, setActiveTab] = useState<NavSection>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('acesso') === 'familiar') {
+        return 'family';
+      }
+    } catch {
+      // ignore query param error
+    }
+    return 'dashboard';
+  });
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('acesso') === 'familiar' && !user && isGuest) {
+        exitGuestMode();
+      }
+    } catch {
+      // ignore
+    }
+  }, [user, isGuest, exitGuestMode]);
   const [selectedCampus, setSelectedCampus] = useState<CampusLevel>(() => {
     try {
       const saved = localStorage.getItem('concurso_alepa_campus');
@@ -61,6 +85,10 @@ function CampusShell() {
   });
   const [timerPreset, setTimerPreset] = useState<{ disciplineId?: string; topicTitle?: string }>({});
   const [contentInitialScope, setContentInitialScope] = useState<LibraryScope | undefined>(undefined);
+
+  useEffect(() => {
+    updateAccessPresenceContext(activeTab, selectedCampus);
+  }, [activeTab, selectedCampus, updateAccessPresenceContext]);
 
   const handleChangeCampus = (campus: CampusLevel) => {
     setSelectedCampus(campus);
@@ -114,15 +142,18 @@ function CampusShell() {
   const desktopNavItems: Array<{ id: NavSection; label: string }> = [
     { id: 'materials', label: 'Conteúdo' },
     { id: 'disciplines', label: 'Disciplinas' },
+    { id: 'videos', label: 'Vídeos' },
     { id: 'schedule', label: 'Cronograma' },
     { id: 'simulados', label: 'Simulados' },
     { id: 'revisions', label: 'Revisões' },
     { id: 'podcasts', label: 'Podcasts' },
+    { id: 'family', label: 'Familiares' },
   ];
 
   const mobileTabs: Array<{ id: NavSection; label: string; icon: React.ComponentType<{ className?: string }> }> = [
     { id: 'dashboard', label: 'Início', icon: Home },
     { id: 'materials', label: 'Conteúdo', icon: FileText },
+    { id: 'videos', label: 'Vídeos', icon: Video },
     { id: 'disciplines', label: 'Disciplinas', icon: BookOpen },
     { id: 'schedule', label: '2h/dia', icon: CalendarDays },
     { id: 'simulados', label: 'Questões', icon: CheckSquare },
@@ -164,13 +195,26 @@ function CampusShell() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             <PWAInstallButton variant="header" />
+            <button
+              type="button"
+              onClick={() => setActiveTab('family')}
+              title="Acesso por Familiares e Contagem de Pessoas Online"
+              className={`md:hidden min-h-[38px] px-2.5 py-1.5 text-xs font-semibold rounded-xl inline-flex items-center gap-1 border whitespace-nowrap shrink-0 ${
+                activeTab === 'family'
+                  ? 'bg-[#0B3321] text-white border-[#0B3321]'
+                  : 'bg-emerald-50 text-[#0B3321] border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Familiares</span>
+            </button>
             {isGuest && !user && (
               <button
                 type="button"
                 onClick={exitGuestMode}
-                className="min-h-[40px] px-3 sm:px-3.5 py-2 text-xs font-semibold text-[#0B3321] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl whitespace-nowrap shrink-0"
+                className="min-h-[38px] px-3 py-1.5 text-xs font-semibold text-[#0B3321] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl whitespace-nowrap shrink-0"
               >
                 Entrar / Nuvem
               </button>
@@ -179,7 +223,7 @@ function CampusShell() {
               type="button"
               onClick={logout}
               title={`Sair (${profile?.displayName || user?.email || 'Visitante'})`}
-              className="min-h-[40px] px-4 py-2 text-xs font-semibold text-white bg-[#0B3321] hover:bg-[#134b32] rounded-xl inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              className="min-h-[38px] px-3 sm:px-4 py-1.5 text-xs font-semibold text-white bg-[#0B3321] hover:bg-[#134b32] rounded-xl inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Sair</span>
@@ -207,8 +251,10 @@ function CampusShell() {
                 {activeTab === 'simulados' && 'Simulados'}
                 {activeTab === 'revisions' && 'Revisões'}
                 {activeTab === 'podcasts' && 'Podcasts'}
+                {activeTab === 'videos' && 'Vídeos'}
                 {activeTab === 'materials' && 'Conteúdo & Disciplinas'}
                 {activeTab === 'performance' && 'Desempenho'}
+                {activeTab === 'family' && 'Acesso por Familiares'}
               </span>
             </div>
 
@@ -355,6 +401,7 @@ function CampusShell() {
         )}
         {activeTab === 'revisions' && <ErrorNotebookView campus={selectedCampus} />}
         {activeTab === 'podcasts' && <PodcastsView campus={selectedCampus} />}
+        {activeTab === 'videos' && <VideosView campus={selectedCampus} />}
         {activeTab === 'materials' && (
           <MaterialsView
             campus={selectedCampus}
@@ -365,12 +412,22 @@ function CampusShell() {
         {activeTab === 'performance' && (
           <PerformanceView campus={selectedCampus} medioCargoGroup={selectedMedioCargo} />
         )}
+        {activeTab === 'family' && (
+          <FamilyAccessView
+            campus={selectedCampus}
+            onNavigate={setActiveTab}
+            onOpenContent={(scope) => {
+              setContentInitialScope(scope);
+              setActiveTab('materials');
+            }}
+          />
+        )}
       </main>
 
-      {/* Mobile Bottom Tab Bar (Thumb Zone, <= 15% viewport cap) */}
+      {/* Mobile Bottom Tab Bar (Thumb Zone, horizontal scroll for 7 tabs) */}
       <nav
         aria-label="Navegação mobile"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 grid grid-cols-6 h-16"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 flex items-center overflow-x-auto h-16"
       >
         {mobileTabs.map((tab) => {
           const Icon = tab.icon;
@@ -380,12 +437,12 @@ function CampusShell() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center justify-center min-h-[44px] ${
+              className={`flex flex-col items-center justify-center min-h-[44px] min-w-[60px] flex-1 shrink-0 px-1 ${
                 isActive ? 'text-[#0B3321] font-semibold' : 'text-slate-500'
               }`}
             >
               <Icon className="w-5 h-5" />
-              <span className="text-[10px] tracking-tight mt-1">{tab.label}</span>
+              <span className="text-[10px] tracking-tight mt-1 whitespace-nowrap">{tab.label}</span>
             </button>
           );
         })}

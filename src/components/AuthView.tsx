@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Eye, EyeOff, Lock, Mail, User as UserIcon, AlertCircle, BookOpen, ExternalLink } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Eye, EyeOff, Lock, Mail, User as UserIcon, AlertCircle, BookOpen, ExternalLink, Users } from 'lucide-react';
 import firebaseConfig from '../../firebase-applet-config.json';
 import bannerImg from '../assets/images/alepa_campus_banner_1794572280452.jpg';
 import emblemImg from '../assets/images/alepa_campus_emblem_1794572279329.jpg';
@@ -10,7 +10,8 @@ import { UserRole } from '../types';
 
 export function AuthView() {
   const { loginWithEmail, registerWithEmail, loginWithGoogle, enterGuestMode } = useAuth();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'family'>('login');
+  const [familyStep, setFamilyStep] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -21,6 +22,22 @@ export function AuthView() {
   const [showProviderHelp, setShowProviderHelp] = useState(false);
   const [imgBannerFailed, setImgBannerFailed] = useState(false);
   const [imgEmblemFailed, setImgEmblemFailed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const acesso = params.get('acesso');
+      const invitedEmail = params.get('email');
+      if (acesso === 'familiar') {
+        setMode('family');
+      }
+      if (invitedEmail) {
+        setEmail(invitedEmail.trim());
+      }
+    } catch {
+      // ignore invalid URL search params
+    }
+  }, []);
 
   const daysLeft = getDaysUntilExam();
 
@@ -48,18 +65,20 @@ export function AuthView() {
     return err instanceof Error ? err.message : 'Não foi possível autenticar agora.';
   };
 
+  const isRegistering = mode === 'register' || (mode === 'family' && familyStep === 'register');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setLoading(true);
     try {
-      if (mode === 'login') {
+      if (!isRegistering) {
         await loginWithEmail(email, password);
       } else {
         if (!displayName.trim()) {
           throw new Error('Informe seu nome completo.');
         }
-        await registerWithEmail(email, password, displayName, role);
+        await registerWithEmail(email, password, displayName, mode === 'family' ? 'student' : role);
       }
     } catch (err) {
       setErrorMsg(mapAuthError(err));
@@ -165,25 +184,31 @@ export function AuthView() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="font-display text-2xl font-bold text-slate-900">
-                {mode === 'login' ? 'Acessar Campus' : 'Criar Conta'}
+                {mode === 'family'
+                  ? 'Acesso por Familiares'
+                  : mode === 'login'
+                    ? 'Acessar Campus'
+                    : 'Criar Conta'}
               </h2>
               <p className="text-sm text-slate-500 mt-1">
-                {mode === 'login'
-                  ? 'Entre para sincronizar seu histórico entre dispositivos.'
-                  : 'Cadastre-se como estudante ou professor da turma.'}
+                {mode === 'family'
+                  ? 'Entre com seu Google ou e-mail familiar para acessar os conteúdos compartilhados.'
+                  : mode === 'login'
+                    ? 'Entre para sincronizar seu histórico entre dispositivos.'
+                    : 'Cadastre-se como estudante ou professor da turma.'}
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl mb-6">
+          <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl mb-5">
             <button
               type="button"
               onClick={() => {
                 setMode('login');
                 setErrorMsg(null);
               }}
-              className={`min-h-[44px] text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
-                mode === 'login' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`min-h-[42px] text-xs sm:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                mode === 'login' ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Entrar
@@ -191,16 +216,64 @@ export function AuthView() {
             <button
               type="button"
               onClick={() => {
+                setMode('family');
+                setErrorMsg(null);
+              }}
+              className={`min-h-[42px] text-xs sm:text-sm font-medium rounded-lg transition-colors inline-flex items-center justify-center gap-1 whitespace-nowrap ${
+                mode === 'family' ? 'bg-[#0B3321] text-white shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Familiares</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 setMode('register');
                 setErrorMsg(null);
               }}
-              className={`min-h-[44px] text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
-                mode === 'register' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`min-h-[42px] text-xs sm:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                mode === 'register' ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Cadastrar
             </button>
           </div>
+
+          {mode === 'family' && (
+            <div className="mb-4 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2.5">
+              <div className="flex items-start gap-2.5">
+                <Users className="w-4 h-4 text-[#0B3321] shrink-0 mt-0.5" />
+                <div className="text-xs text-slate-700 leading-relaxed">
+                  <p className="font-bold text-[#0B3321]">Área de Ensino Compartilhada da Família</p>
+                  <p className="mt-0.5">
+                    Ao entrar aqui, você acessa imediatamente os PDFs, pastas do Drive, aulas e simulados publicados na
+                    biblioteca da família.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-1 p-1 bg-white/80 border border-emerald-200/80 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setFamilyStep('login')}
+                  className={`py-1.5 text-xs font-semibold rounded-md ${
+                    familyStep === 'login' ? 'bg-[#0B3321] text-white' : 'text-slate-700'
+                  }`}
+                >
+                  Já tenho acesso
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFamilyStep('register')}
+                  className={`py-1.5 text-xs font-semibold rounded-md ${
+                    familyStep === 'register' ? 'bg-[#0B3321] text-white' : 'text-slate-700'
+                  }`}
+                >
+                  Primeiro acesso
+                </button>
+              </div>
+            </div>
+          )}
 
           {errorMsg && (
             <div
@@ -242,11 +315,11 @@ export function AuthView() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'register' && (
+            {isRegistering && (
               <>
                 <div>
                   <label htmlFor="auth-name" className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Nome completo
+                    {mode === 'family' ? 'Nome do familiar' : 'Nome completo'}
                   </label>
                   <div className="relative">
                     <UserIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -262,39 +335,41 @@ export function AuthView() {
                   </div>
                 </div>
 
-                <div>
-                  <span className="block text-sm font-medium text-slate-700 mb-1.5">Perfil de acesso</span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRole('student')}
-                      className={`min-h-[44px] px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-                        role === 'student'
-                          ? 'border-[#0B3321] bg-slate-900 text-white'
-                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      Estudante
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRole('teacher')}
-                      className={`min-h-[44px] px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-                        role === 'teacher'
-                          ? 'border-[#0B3321] bg-slate-900 text-white'
-                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      Professor
-                    </button>
+                {mode === 'register' && (
+                  <div>
+                    <span className="block text-sm font-medium text-slate-700 mb-1.5">Perfil de acesso</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRole('student')}
+                        className={`min-h-[44px] px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                          role === 'student'
+                            ? 'border-[#0B3321] bg-slate-900 text-white'
+                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        Estudante
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRole('teacher')}
+                        className={`min-h-[44px] px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                          role === 'teacher'
+                            ? 'border-[#0B3321] bg-slate-900 text-white'
+                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        Professor
+                      </button>
+                    </div>
+                    {role === 'teacher' && (
+                      <p className="text-xs text-slate-500 mt-1.5">
+                        Publicações compartilhadas com toda a turma são autorizadas à conta docente principal; suas
+                        questões e materiais pessoais ficam sempre salvos na sua conta.
+                      </p>
+                    )}
                   </div>
-                  {role === 'teacher' && (
-                    <p className="text-xs text-slate-500 mt-1.5">
-                      Publicações compartilhadas com toda a turma são autorizadas à conta docente principal; suas
-                      questões e materiais pessoais ficam sempre salvos na sua conta.
-                    </p>
-                  )}
-                </div>
+                )}
               </>
             )}
 
@@ -348,7 +423,15 @@ export function AuthView() {
               disabled={loading}
               className="w-full min-h-[46px] px-4 py-2.5 bg-[#0B3321] hover:bg-[#134b32] disabled:opacity-60 text-white text-sm font-semibold rounded-xl transition-colors"
             >
-              {loading ? 'Autenticando...' : mode === 'login' ? 'Entrar com E-mail e Senha' : 'Criar Conta e Entrar na Hora'}
+              {loading
+                ? 'Autenticando...'
+                : isRegistering
+                  ? mode === 'family'
+                    ? 'Criar Acesso Familiar e Entrar'
+                    : 'Criar Conta e Entrar na Hora'
+                  : mode === 'family'
+                    ? 'Entrar como Familiar'
+                    : 'Entrar com E-mail e Senha'}
             </button>
           </form>
 

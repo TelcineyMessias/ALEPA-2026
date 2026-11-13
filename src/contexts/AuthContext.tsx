@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   GoogleAuthProvider,
   User,
@@ -33,6 +33,7 @@ import {
   handleFirestoreError,
   isAdminEmail,
   testFirestoreConnection,
+  toFamilyMemberDocId,
   workspaceAuthProvider,
 } from '../lib/firebase';
 import { CONCURSO_PROFILE } from '../data/alepaSyllabus';
@@ -41,10 +42,13 @@ import { EXTRA_CURATED_QUESTIONS } from '../data/alepaExtraQuestions';
 import { GERAL_DEFAULT_MATERIALS } from '../data/alepaGeneralLibrary';
 import { MEDIO_DEFAULT_MATERIALS, MEDIO_QUESTIONS } from '../data/alepaMedioLibrary';
 import {
+  AccessSession,
   BlockType,
+  CampusLevel,
   DisciplineWeeklyGoal,
   ErrorEntry,
   ErrorReason,
+  FamilyMember,
   LibraryCategoryId,
   LinkStatus,
   MaterialFileType,
@@ -69,6 +73,21 @@ interface AuthContextValue {
   workspaceAccessToken: string | null;
   connectGoogleWorkspace: () => Promise<string | null>;
   clearWorkspaceToken: () => void;
+  isAdmin: boolean;
+  canPublishShared: boolean;
+  myFamilyMembership: FamilyMember | null;
+  familyMembers: FamilyMember[];
+  accessSessions: AccessSession[];
+  updateAccessPresenceContext: (tab: string, campus: CampusLevel) => void;
+  inviteFamilyMember: (input: {
+    name: string;
+    email: string;
+    relationship: string;
+    canPublish: boolean;
+  }) => Promise<void>;
+  toggleFamilyMemberPublish: (memberId: string, canPublish: boolean) => Promise<void>;
+  toggleFamilyMemberActive: (memberId: string, active: boolean) => Promise<void>;
+  removeFamilyMember: (memberId: string) => Promise<void>;
   topicProgressMap: Record<string, TopicProgress>;
   disciplineGoalsMap: Record<string, DisciplineWeeklyGoal>;
   studySessions: StudySession[];
@@ -174,7 +193,27 @@ function addDaysIso(days: number): string {
 
 const GUEST_MODE_KEY = 'concurso_alepa_guest_mode';
 const GUEST_DATA_KEY = 'concurso_alepa_guest_data_v1';
+const DEVICE_ID_KEY = 'concurso_alepa_device_id_v1';
 const GUEST_UID = 'guest_local';
+
+function getOrCreateDeviceId(): string {
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_KEY);
+    if (existing && /^[a-zA-Z0-9_-]{4,80}$/.test(existing)) {
+      return existing;
+    }
+    const created = sanitizeId(`dev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`).slice(0, 80);
+    localStorage.setItem(DEVICE_ID_KEY, created);
+    return created;
+  } catch {
+    return 'dev_browser';
+  }
+}
+
+function detectDeviceType(): 'mobile' | 'desktop' {
+  if (typeof navigator === 'undefined') return 'desktop';
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'mobile' : 'desktop';
+}
 
 interface GuestStoreData {
   profile: UserProfile;
@@ -261,6 +300,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [myMaterials, setMyMaterials] = useState<StudyMaterial[]>([]);
   const [publishedQuestions, setPublishedQuestions] = useState<Question[]>([]);
   const [myQuestions, setMyQuestions] = useState<Question[]>([]);
+  const [myFamilyMembership, setMyFamilyMembership] = useState<FamilyMember | null>(null);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [accessSessions, setAccessSessions] = useState<AccessSession[]>([]);
+  const presenceContextRef = useRef<{ tab: string; campus: CampusLevel }>({
+    tab: 'dashboard',
+    campus: 'superior',
+  });
+  const deviceIdRef = useRef<string>(getOrCreateDeviceId());
+
+  const isAdmin = Boolean(user?.emailVerified && isAdminEmail(user?.email));
+  const canPublishShared =
+    isAdmin || Boolean(user?.emailVerified && myFamilyMembership?.active && myFamilyMembership?.canPublish);
 
   useEffect(() => {
     void testFirestoreConnection();
@@ -274,9 +325,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStudySessions(data.studySessions);
     setSimuladoAttempts(data.simuladoAttempts);
     setErrorNotebook(data.errorNotebook);
-    setSharedMaterials([]);
     setMyMaterials(data.myMaterials);
-    setPublishedQuestions([]);
     setMyQuestions(data.myQuestions);
   };
 
@@ -323,10 +372,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setStudySessions([]);
           setSimuladoAttempts([]);
           setErrorNotebook([]);
-          setSharedMaterials([]);
           setMyMaterials([]);
-          setPublishedQuestions([]);
           setMyQuestions([]);
+          setMyFamilyMembership(null);
+          setFamilyMembers([]);
+          setAccessSessions([]);
         }
         setAuthLoading(false);
         return;
@@ -465,31 +515,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     unsubs.push(
       onSnapshot(
-        query(collection(db, 'materials'), where('isShared', '==', true)),
-        (snap) => {
-          setSharedMaterials(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<StudyMaterial, 'id'>) })));
-        },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'materials')
-      )
-    );
-
-    unsubs.push(
-      onSnapshot(
         query(collection(db, 'materials'), where('ownerId', '==', uid)),
         (snap) => {
           setMyMaterials(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<StudyMaterial, 'id'>) })));
         },
         (err) => handleFirestoreError(err, OperationType.LIST, 'materials')
-      )
-    );
-
-    unsubs.push(
-      onSnapshot(
-        query(collection(db, 'sharedQuestions'), where('isPublished', '==', true)),
-        (snap) => {
-          setPublishedQuestions(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Question, 'id'>) })));
-        },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'sharedQuestions')
       )
     );
 
@@ -503,10 +533,186 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       )
     );
 
+    if (user.emailVerified && user.email) {
+      const famId = toFamilyMemberDocId(user.email);
+      unsubs.push(
+        onSnapshot(
+          doc(db, 'familyMembers', famId),
+          (snap) => {
+            if (snap.exists()) {
+              setMyFamilyMembership({ id: snap.id, ...(snap.data() as Omit<FamilyMember, 'id'>) });
+            } else {
+              setMyFamilyMembership(null);
+            }
+          },
+          () => {
+            setMyFamilyMembership(null);
+          }
+        )
+      );
+    } else {
+      setMyFamilyMembership(null);
+    }
+
+    const userIsAdmin = Boolean(user.emailVerified && isAdminEmail(user.email));
+    if (userIsAdmin) {
+      unsubs.push(
+        onSnapshot(
+          collection(db, 'familyMembers'),
+          (snap) => {
+            setFamilyMembers(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<FamilyMember, 'id'>) })));
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'familyMembers')
+        )
+      );
+      unsubs.push(
+        onSnapshot(
+          collection(db, 'accessSessions'),
+          (snap) => {
+            setAccessSessions(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<AccessSession, 'id'>) })));
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'accessSessions')
+        )
+      );
+    } else {
+      setFamilyMembers([]);
+      unsubs.push(
+        onSnapshot(
+          query(collection(db, 'accessSessions'), where('userId', '==', uid)),
+          (snap) => {
+            setAccessSessions(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<AccessSession, 'id'>) })));
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'accessSessions')
+        )
+      );
+    }
+
     return () => {
       unsubs.forEach((u) => u());
     };
   }, [user]);
+
+  useEffect(() => {
+    const unsubSharedMaterials = onSnapshot(
+      query(collection(db, 'materials'), where('isShared', '==', true)),
+      (snap) => {
+        setSharedMaterials(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<StudyMaterial, 'id'>) })));
+      },
+      (err) => {
+        console.warn('Falha ao sincronizar materiais compartilhados:', err);
+      }
+    );
+
+    const unsubPublishedQuestions = onSnapshot(
+      query(collection(db, 'sharedQuestions'), where('isPublished', '==', true)),
+      (snap) => {
+        setPublishedQuestions(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Question, 'id'>) })));
+      },
+      (err) => {
+        console.warn('Falha ao sincronizar questões publicadas:', err);
+      }
+    );
+
+    return () => {
+      unsubSharedMaterials();
+      unsubPublishedQuestions();
+    };
+  }, []);
+
+  const syncAccessPresence = useCallback(
+    async (online: boolean) => {
+      const current = auth.currentUser;
+      if (!current) return;
+      const devId = deviceIdRef.current;
+      const sessionId = sanitizeId(`${current.uid}_${devId}`);
+      const ref = doc(db, 'accessSessions', sessionId);
+      const userIsAdmin = Boolean(current.emailVerified && isAdminEmail(current.email));
+      const accessType: AccessSession['accessType'] = userIsAdmin
+        ? 'admin'
+        : myFamilyMembership?.active
+          ? 'familiar'
+          : 'estudante';
+      const displayName = (
+        profile?.displayName ||
+        current.displayName ||
+        current.email?.split('@')[0] ||
+        'Visitante'
+      ).slice(0, 120);
+      const deviceType = detectDeviceType();
+      const currentTab = (presenceContextRef.current.tab || 'dashboard').slice(0, 40);
+      const activeCampus: CampusLevel = presenceContextRef.current.campus === 'medio' ? 'medio' : 'superior';
+
+      try {
+        const snap = await getDoc(ref);
+        if (!snap.exists()) {
+          await setDoc(ref, {
+            userId: current.uid,
+            deviceId: devId,
+            displayName,
+            accessType,
+            deviceType,
+            currentTab,
+            activeCampus,
+            isOnline: online,
+            sessionStartedAt: serverTimestamp(),
+            lastSeenAt: serverTimestamp(),
+          });
+        } else {
+          await updateDoc(ref, {
+            displayName,
+            accessType,
+            deviceType,
+            currentTab,
+            activeCampus,
+            isOnline: online,
+            lastSeenAt: serverTimestamp(),
+          });
+        }
+      } catch {
+        // Non-blocking heartbeat error
+      }
+    },
+    [profile?.displayName, myFamilyMembership?.active]
+  );
+
+  const updateAccessPresenceContext = useCallback(
+    (tab: string, campus: CampusLevel) => {
+      const prev = presenceContextRef.current;
+      if (prev.tab === tab && prev.campus === campus) return;
+      presenceContextRef.current = { tab, campus };
+      if (auth.currentUser) {
+        void syncAccessPresence(true);
+      }
+    },
+    [syncAccessPresence]
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    void syncAccessPresence(true);
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void syncAccessPresence(true);
+      }
+    }, 45000);
+
+    const onVisibility = () => {
+      void syncAccessPresence(document.visibilityState === 'visible');
+    };
+    const onPageHide = () => {
+      void syncAccessPresence(false);
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [user, syncAccessPresence]);
 
   const materials = React.useMemo(() => {
     const merged = new Map<string, StudyMaterial>();
@@ -693,6 +899,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isGuest && !auth.currentUser) {
       exitGuestMode();
       return;
+    }
+    if (auth.currentUser) {
+      await syncAccessPresence(false);
     }
     await signOut(auth);
   };
@@ -1131,9 +1340,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const current = ensureSignedIn();
-    const isAdminUser =
-      Boolean(current.emailVerified) && isAdminEmail(current.email);
-    const canShare = Boolean(input.isShared && isAdminUser);
+    const canShare = Boolean(input.isShared && canPublishShared);
     const path = `materials/${materialId}`;
     try {
       const payload: Record<string, unknown> = {
@@ -1227,9 +1434,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const current = ensureSignedIn();
-    const isAdminUser =
-      Boolean(current.emailVerified) && isAdminEmail(current.email);
-    const canPublish = Boolean(input.isPublished && isAdminUser);
+    const canPublish = Boolean(input.isPublished && canPublishShared);
     const path = `sharedQuestions/${questionId}`;
     try {
       await setDoc(doc(db, 'sharedQuestions', questionId), {
@@ -1255,6 +1460,91 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const inviteFamilyMember = async (input: {
+    name: string;
+    email: string;
+    relationship: string;
+    canPublish: boolean;
+  }) => {
+    const current = ensureSignedIn();
+    const cleanEmail = input.email.trim().toLowerCase().slice(0, 160);
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error('Informe um e-mail válido do familiar.');
+    }
+    const memberId = toFamilyMemberDocId(cleanEmail);
+    const path = `familyMembers/${memberId}`;
+    try {
+      const ref = doc(db, 'familyMembers', memberId);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        await updateDoc(ref, {
+          name: input.name.trim().slice(0, 120) || cleanEmail.split('@')[0],
+          relationship: input.relationship.trim().slice(0, 60) || 'Familiar',
+          canPublish: Boolean(input.canPublish),
+          active: true,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(ref, {
+          memberId,
+          name: input.name.trim().slice(0, 120) || cleanEmail.split('@')[0],
+          email: cleanEmail,
+          relationship: input.relationship.trim().slice(0, 60) || 'Familiar',
+          canPublish: Boolean(input.canPublish),
+          active: true,
+          invitedByUid: current.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (err) {
+      setSyncError('Erro ao salvar autorização do familiar.');
+      handleFirestoreError(err, OperationType.WRITE, path);
+    }
+  };
+
+  const toggleFamilyMemberPublish = async (memberId: string, canPublish: boolean) => {
+    ensureSignedIn();
+    const safeId = sanitizeId(memberId);
+    const path = `familyMembers/${safeId}`;
+    try {
+      await updateDoc(doc(db, 'familyMembers', safeId), {
+        canPublish: Boolean(canPublish),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      setSyncError('Erro ao atualizar permissão do familiar.');
+      handleFirestoreError(err, OperationType.UPDATE, path);
+    }
+  };
+
+  const toggleFamilyMemberActive = async (memberId: string, active: boolean) => {
+    ensureSignedIn();
+    const safeId = sanitizeId(memberId);
+    const path = `familyMembers/${safeId}`;
+    try {
+      await updateDoc(doc(db, 'familyMembers', safeId), {
+        active: Boolean(active),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      setSyncError('Erro ao atualizar status do familiar.');
+      handleFirestoreError(err, OperationType.UPDATE, path);
+    }
+  };
+
+  const removeFamilyMember = async (memberId: string) => {
+    ensureSignedIn();
+    const safeId = sanitizeId(memberId);
+    const path = `familyMembers/${safeId}`;
+    try {
+      await deleteDoc(doc(db, 'familyMembers', safeId));
+    } catch (err) {
+      setSyncError('Erro ao remover familiar.');
+      handleFirestoreError(err, OperationType.DELETE, path);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -1267,6 +1557,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         workspaceAccessToken,
         connectGoogleWorkspace,
         clearWorkspaceToken,
+        isAdmin,
+        canPublishShared,
+        myFamilyMembership,
+        familyMembers,
+        accessSessions,
+        updateAccessPresenceContext,
+        inviteFamilyMember,
+        toggleFamilyMemberPublish,
+        toggleFamilyMemberActive,
+        removeFamilyMember,
         topicProgressMap,
         disciplineGoalsMap,
         studySessions,

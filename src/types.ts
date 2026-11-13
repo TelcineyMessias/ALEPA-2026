@@ -11,8 +11,10 @@ export type NavSection =
   | 'simulados'
   | 'revisions'
   | 'podcasts'
+  | 'videos'
   | 'materials'
-  | 'performance';
+  | 'performance'
+  | 'family';
 
 export type BlockType = 'theory' | 'questions' | 'correction' | 'revision';
 
@@ -224,4 +226,31 @@ export interface StudyMaterial {
   localBlobKey?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
+}
+
+export interface FamilyMember {
+  id: string;
+  memberId: string;
+  name: string;
+  email: string;
+  relationship: string;
+  canPublish: boolean;
+  active: boolean;
+  invitedByUid: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface AccessSession {
+  id: string;
+  userId: string;
+  deviceId: string;
+  displayName: string;
+  accessType: 'admin' | 'familiar' | 'estudante';
+  deviceType: 'mobile' | 'desktop';
+  currentTab: string;
+  activeCampus: CampusLevel;
+  isOnline: boolean;
+  sessionStartedAt?: unknown;
+  lastSeenAt?: unknown;
 }

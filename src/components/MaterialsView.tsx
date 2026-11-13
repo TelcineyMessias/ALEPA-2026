@@ -17,6 +17,7 @@ import {
   Link2,
   Loader2,
   LogOut,
+  Play,
   Plus,
   Presentation,
   RefreshCw,
@@ -27,6 +28,7 @@ import {
   Video,
   X,
 } from 'lucide-react';
+import { YouTubeBrandIcon, extractYouTubeId } from './VideosView';
 import { useAuth } from '../contexts/AuthContext';
 import {
   CAMPUS_LIBRARY_RECOMMENDATIONS,
@@ -166,7 +168,13 @@ function inferMaterialTypesFromUrl(rawUrl: string): {
     return { fileType: 'pptx', resourceType: 'pdf' };
   }
   if (parsed.kind === 'drive_file') return { fileType: 'drive', resourceType: 'pdf' };
-  if (lower.includes('youtube.com') || lower.includes('youtu.be')) {
+  if (
+    lower.includes('youtube.com') ||
+    lower.includes('youtu.be') ||
+    lower.includes('instagram.com') ||
+    lower.includes('tiktok.com') ||
+    lower.includes('vimeo.com')
+  ) {
     return { fileType: 'video', resourceType: 'video' };
   }
   return { fileType: 'pdf', resourceType: 'pdf' };
@@ -199,6 +207,23 @@ function buildEmbedUrl(material: StudyMaterial): string | null {
   const ytShort = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
   if (ytShort) {
     return `https://www.youtube.com/embed/${ytShort[1]}`;
+  }
+  const ytShortsOrLive = url.match(/youtube\.com\/(?:shorts|live|embed)\/([a-zA-Z0-9_-]{11})/);
+  if (ytShortsOrLive) {
+    return `https://www.youtube.com/embed/${ytShortsOrLive[1]}`;
+  }
+  const igMatch = url.match(/instagram\.com\/(?:[^/]+\/)?(reel|reels|p|tv)\/([a-zA-Z0-9_-]+)/i);
+  if (igMatch) {
+    const kind = igMatch[1].toLowerCase() === 'reels' ? 'reel' : igMatch[1].toLowerCase();
+    return `https://www.instagram.com/${kind}/${igMatch[2]}/embed/`;
+  }
+  const ttMatch = url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i) || url.match(/tiktok\.com\/v\/(\d+)/i);
+  if (ttMatch) {
+    return `https://www.tiktok.com/embed/v2/${ttMatch[1]}`;
+  }
+  const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+  if (vimeoMatch) {
+    return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
   }
 
   if ((material.fileType === 'pptx' || material.fileType === 'xlsx') && /\.(pptx?|xlsx?)$/i.test(url)) {
@@ -256,6 +281,8 @@ export function MaterialsView({
     deleteMaterial,
     user,
     profile,
+    isAdmin,
+    canPublishShared,
     workspaceAccessToken,
     connectGoogleWorkspace,
     clearWorkspaceToken,
@@ -483,6 +510,8 @@ export function MaterialsView({
     }
 
     setSelectedFile(null);
+    setModalScope(libraryScope);
+    setIsShared(canPublishShared);
     setShowAddModal(true);
   };
 
@@ -797,6 +826,9 @@ export function MaterialsView({
     if (nextUrl.trim()) {
       const inferred = inferMaterialTypesFromUrl(nextUrl);
       setFileType(inferred.fileType);
+      if (inferred.resourceType === 'video') {
+        setResourceType('video');
+      }
     }
   };
 
@@ -928,6 +960,7 @@ export function MaterialsView({
                   ? activeCategories.find((c) => c.id === selectedCategory)
                   : undefined;
               setCategoryId(selectedCat ? selectedCat.id : activeCategories[0].id);
+              setIsShared(canPublishShared);
               setShowAddModal(true);
             }}
             className="min-h-[42px] px-4 py-2 bg-[#0B3321] hover:bg-[#134b32] text-white text-xs sm:text-sm font-semibold rounded-xl inline-flex items-center gap-2 whitespace-nowrap"
@@ -1057,6 +1090,7 @@ export function MaterialsView({
                   onClick={() => {
                     setModalScope(libraryScope);
                     setCategoryId(selectedCategory);
+                    setIsShared(canPublishShared);
                     setShowAddModal(true);
                   }}
                   className="min-h-[34px] px-3 py-1 bg-emerald-50 border border-emerald-200 text-[#0B3321] text-xs font-semibold rounded-lg inline-flex items-center gap-1 whitespace-nowrap"
@@ -1590,13 +1624,21 @@ export function MaterialsView({
             const Icon = getMaterialIcon(mat);
             const isLocal = mat.url.startsWith('local://');
             const parsedUrl = parseGoogleWorkspaceUrl(mat.url);
-            const canDelete = !mat.isSystemDefault && mat.ownerId === (user?.uid || profile?.uid);
+            const ytId = extractYouTubeId(mat.url);
+            const isVideoMat =
+              Boolean(ytId) ||
+              mat.fileType === 'video' ||
+              mat.resourceType === 'video' ||
+              /instagram\.com|tiktok\.com|vimeo\.com/i.test(mat.url);
+            const canDelete = !mat.isSystemDefault && (isAdmin || mat.ownerId === (user?.uid || profile?.uid));
             const resLabel =
-              mat.fileType === 'drive' && parsedUrl.kind === 'folder'
-                ? 'Pasta do Google Drive'
-                : mat.resourceType
-                  ? RESOURCE_LABELS[mat.resourceType]
-                  : FILE_TYPE_LABELS[mat.fileType];
+              ytId
+                ? 'YouTube'
+                : mat.fileType === 'drive' && parsedUrl.kind === 'folder'
+                  ? 'Pasta do Google Drive'
+                  : mat.resourceType
+                    ? RESOURCE_LABELS[mat.resourceType]
+                    : FILE_TYPE_LABELS[mat.fileType];
             const catTitle =
               activeCategories.find((c) => c.id === mat.libraryCategoryId)?.title ||
               getDisciplineShortName(mat.disciplineId);
@@ -1609,7 +1651,11 @@ export function MaterialsView({
                 <div className="space-y-2.5">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                     <div className="flex items-center gap-2">
-                      <Icon className="w-4 h-4 text-[#0B3321]" />
+                      {ytId ? (
+                        <YouTubeBrandIcon className="w-4 h-4" />
+                      ) : (
+                        <Icon className="w-4 h-4 text-[#0B3321]" />
+                      )}
                       <span className="font-semibold text-slate-800">{resLabel}</span>
                       <span aria-hidden="true">·</span>
                       <span>{catTitle}</span>
@@ -1618,6 +1664,32 @@ export function MaterialsView({
                       {mat.isOfficialContent ? 'Conteúdo oficial' : 'Treinamento complementar'}
                     </span>
                   </div>
+
+                  {ytId && (
+                    <button
+                      type="button"
+                      onClick={() => openViewer(mat)}
+                      aria-label={`Dar play em ${mat.title}`}
+                      className="group relative w-full aspect-video rounded-xl overflow-hidden bg-slate-900 text-left"
+                    >
+                      <img
+                        src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`}
+                        alt={mat.title}
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/25 group-hover:bg-black/15 transition-colors" />
+                      <div className="absolute top-2.5 left-2.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/95 text-slate-900 text-[11px] font-bold">
+                        <YouTubeBrandIcon className="w-3.5 h-3.5" />
+                        <span>YouTube</span>
+                      </div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                          <Play className="w-5 h-5 fill-current ml-0.5" />
+                        </div>
+                      </div>
+                    </button>
+                  )}
 
                   <h2 className="font-display text-lg font-bold text-slate-900">{mat.title}</h2>
                   {mat.description && <p className="text-sm text-slate-600 line-clamp-2">{mat.description}</p>}
@@ -1656,12 +1728,16 @@ export function MaterialsView({
                       onClick={() => openViewer(mat)}
                       className="min-h-[40px] px-3.5 py-1.5 bg-[#0B3321] hover:bg-[#134b32] text-white text-xs font-semibold rounded-xl inline-flex items-center gap-1.5 whitespace-nowrap"
                     >
-                      {parsedUrl.kind === 'folder' ? (
+                      {isVideoMat ? (
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                      ) : parsedUrl.kind === 'folder' ? (
                         <FolderOpen className="w-3.5 h-3.5" />
                       ) : (
                         <Eye className="w-3.5 h-3.5" />
                       )}
-                      <span>{parsedUrl.kind === 'folder' ? 'Abrir pasta' : 'Abrir no leitor'}</span>
+                      <span>
+                        {isVideoMat ? 'Dar Play' : parsedUrl.kind === 'folder' ? 'Abrir pasta' : 'Abrir no leitor'}
+                      </span>
                     </button>
 
                     {!isLocal && (
@@ -2451,15 +2527,21 @@ export function MaterialsView({
                   <span>Indicar como conteúdo oficial (órgão/banca/legislação)</span>
                 </label>
 
-                {profile?.role === 'teacher' && !selectedFile && (
+                {canPublishShared && !selectedFile && (
                   <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={isShared}
                       onChange={(e) => setIsShared(e.target.checked)}
                     />
-                    <span>Compartilhar link com toda a turma</span>
+                    <span>Compartilhar com familiares e turma (visível em todos os celulares)</span>
                   </label>
+                )}
+                {selectedFile && (
+                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Arquivos locais ficam salvos apenas neste aparelho. Para liberar para familiares em outros celulares,
+                    cole o link do Google Drive ou PDF online no campo de link acima.
+                  </p>
                 )}
               </div>
 

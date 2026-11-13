@@ -147,6 +147,41 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "disciplineId", "weeklyGoalMinutes", "updatedAt"]
+    },
+    "FamilyMember": {
+      "title": "FamilyMember",
+      "description": "Familiar autorizado para acessar e/ou publicar conteúdos de ensino",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "relationship": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "canPublish": { "type": "boolean" },
+        "active": { "type": "boolean" },
+        "invitedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["memberId", "name", "email", "relationship", "canPublish", "active", "invitedByUid", "createdAt", "updatedAt"]
+    },
+    "AccessSession": {
+      "title": "AccessSession",
+      "description": "Presença ativa de acesso em tempo real (computador e celular)",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "deviceId": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "accessType": { "type": "string", "enum": ["admin", "familiar", "estudante"] },
+        "deviceType": { "type": "string", "enum": ["mobile", "desktop"] },
+        "currentTab": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "activeCampus": { "type": "string", "enum": ["superior", "medio"] },
+        "isOnline": { "type": "boolean" },
+        "sessionStartedAt": { "type": "string", "format": "date-time" },
+        "lastSeenAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "deviceId", "displayName", "accessType", "deviceType", "currentTab", "activeCampus", "isOnline", "sessionStartedAt", "lastSeenAt"]
     }
   },
   "firestore": {
@@ -181,6 +216,14 @@
     "/sharedQuestions/{questionId}": {
       "schema": { "$ref": "#/entities/SharedQuestion" },
       "description": "Questões oficiais e de treinamento complementar cadastradas"
+    },
+    "/familyMembers/{memberId}": {
+      "schema": { "$ref": "#/entities/FamilyMember" },
+      "description": "Lista de familiares autorizados e permissões de publicação de ensino"
+    },
+    "/accessSessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/AccessSession" },
+      "description": "Sessões ativas de acesso em tempo real para saber quantas pessoas estão acessando"
     }
   }
 }

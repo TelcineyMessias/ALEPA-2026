@@ -18,18 +18,33 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isPrimaryAdminEmail() {
+      return isVerified()
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() in [
+          'saviobaia6@gmail.com',
+          'saviobaiax5@gmail.com',
+          'legcmp.dle@gmail.com'
+        ];
+    }
+
     function isAdmin() {
       return isVerified() && (
-        (
-          request.auth.token.email is string &&
-          request.auth.token.email.lower() in [
-            'saviobaia6@gmail.com',
-            'saviobaiax5@gmail.com',
-            'legcmp.dle@gmail.com'
-          ]
-        ) ||
+        isPrimaryAdminEmail() ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
+    }
+
+    function familyDocId() {
+      return ('fam_' + request.auth.token.email.lower().replace('[^a-z0-9]', '_'));
+    }
+
+    function isFamilyPublisher() {
+      return isVerified()
+        && request.auth.token.email is string
+        && exists(/databases/$(database)/documents/familyMembers/$(familyDocId()))
+        && get(/databases/$(database)/documents/familyMembers/$(familyDocId())).data.active == true
+        && get(/databases/$(database)/documents/familyMembers/$(familyDocId())).data.canPublish == true;
     }
 
     function isValidId(id) {
@@ -180,6 +195,35 @@ service cloud.firestore {
         && data.createdAt is timestamp;
     }
 
+    function isValidFamilyMember(data, memberId) {
+      return data.keys().hasAll(['memberId', 'name', 'email', 'relationship', 'canPublish', 'active', 'invitedByUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['memberId', 'name', 'email', 'relationship', 'canPublish', 'active', 'invitedByUid', 'createdAt', 'updatedAt'])
+        && data.memberId is string && data.memberId == memberId && isValidId(data.memberId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.relationship is string && data.relationship.size() >= 1 && data.relationship.size() <= 60
+        && data.canPublish is bool
+        && data.active is bool
+        && data.invitedByUid is string && isValidId(data.invitedByUid)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAccessSession(data) {
+      return data.keys().hasAll(['userId', 'deviceId', 'displayName', 'accessType', 'deviceType', 'currentTab', 'activeCampus', 'isOnline', 'sessionStartedAt', 'lastSeenAt'])
+        && data.keys().hasOnly(['userId', 'deviceId', 'displayName', 'accessType', 'deviceType', 'currentTab', 'activeCampus', 'isOnline', 'sessionStartedAt', 'lastSeenAt'])
+        && data.userId is string && isValidId(data.userId)
+        && data.deviceId is string && isValidId(data.deviceId) && data.deviceId.size() <= 80
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && data.accessType is string && data.accessType in ['admin', 'familiar', 'estudante']
+        && data.deviceType is string && data.deviceType in ['mobile', 'desktop']
+        && data.currentTab is string && data.currentTab.size() >= 1 && data.currentTab.size() <= 40
+        && data.activeCampus is string && data.activeCampus in ['superior', 'medio']
+        && data.isOnline is bool
+        && data.sessionStartedAt is timestamp
+        && data.lastSeenAt is timestamp;
+    }
+
     match /admins/{adminId} {
       allow get: if isValidId(adminId) && isOwner(adminId);
     }
@@ -298,15 +342,15 @@ service cloud.firestore {
     }
 
     match /materials/{materialId} {
-      allow get: if isValidId(materialId) && isSignedIn() && (existing().isShared == true || existing().ownerId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.isShared == true || resource.data.ownerId == request.auth.uid);
+      allow get: if isValidId(materialId) && (existing().isShared == true || (isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin())));
+      allow list: if resource.data.isShared == true || (isSignedIn() && resource.data.ownerId == request.auth.uid);
       allow create: if isValidId(materialId)
         && isSignedIn()
         && isValidMaterial(incoming())
         && incoming().ownerId == request.auth.uid
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
-        && (incoming().isShared == false || isAdmin());
+        && (incoming().isShared == false || isAdmin() || isFamilyPublisher());
       allow update: if isValidId(materialId)
         && isSignedIn()
         && isValidMaterial(incoming())
@@ -315,6 +359,11 @@ service cloud.firestore {
         && incoming().updatedAt == request.time
         && (
           isAdmin() ||
+          (isFamilyPublisher() && existing().ownerId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'disciplineId', 'libraryCategoryId', 'editalTopic', 'resourceType', 'fileType',
+            'institution', 'url', 'pricing', 'publishedAt', 'lastVerifiedAt', 'linkStatus',
+            'isOfficialContent', 'fileName', 'description', 'isShared', 'updatedAt'
+          ])) ||
           (existing().ownerId == request.auth.uid && incoming().isShared == existing().isShared && incoming().diff(existing()).affectedKeys().hasOnly([
             'title', 'disciplineId', 'libraryCategoryId', 'editalTopic', 'resourceType', 'fileType',
             'institution', 'url', 'pricing', 'publishedAt', 'lastVerifiedAt', 'linkStatus',
@@ -325,14 +374,14 @@ service cloud.firestore {
     }
 
     match /sharedQuestions/{questionId} {
-      allow get: if isValidId(questionId) && isSignedIn() && (existing().isPublished == true || existing().authorId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.isPublished == true || resource.data.authorId == request.auth.uid);
+      allow get: if isValidId(questionId) && (existing().isPublished == true || (isSignedIn() && (existing().authorId == request.auth.uid || isAdmin())));
+      allow list: if resource.data.isPublished == true || (isSignedIn() && resource.data.authorId == request.auth.uid);
       allow create: if isValidId(questionId)
         && isSignedIn()
         && isValidSharedQuestion(incoming())
         && incoming().authorId == request.auth.uid
         && incoming().createdAt == request.time
-        && (incoming().isPublished == false || isAdmin());
+        && (incoming().isPublished == false || isAdmin() || isFamilyPublisher());
       allow update: if isValidId(questionId)
         && isSignedIn()
         && isValidSharedQuestion(incoming())
@@ -343,6 +392,51 @@ service cloud.firestore {
           (existing().authorId == request.auth.uid && incoming().isPublished == existing().isPublished && incoming().diff(existing()).affectedKeys().hasOnly(['disciplineId', 'topicTitle', 'statement', 'options', 'correctIndex', 'explanation', 'legalBasis', 'source', 'originType', 'isOfficial']))
         );
       allow delete: if isValidId(questionId) && isSignedIn() && (existing().authorId == request.auth.uid || isAdmin());
+    }
+
+    match /familyMembers/{memberId} {
+      allow get: if isValidId(memberId) && isSignedIn() && (
+        isPrimaryAdminEmail() ||
+        (isVerified() && request.auth.token.email is string && memberId == familyDocId())
+      );
+      allow list: if isPrimaryAdminEmail();
+      allow create: if isValidId(memberId)
+        && isAdmin()
+        && isValidFamilyMember(incoming(), memberId)
+        && incoming().invitedByUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(memberId)
+        && isAdmin()
+        && isValidFamilyMember(incoming(), memberId)
+        && incoming().memberId == existing().memberId
+        && incoming().email == existing().email
+        && incoming().invitedByUid == existing().invitedByUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'relationship', 'canPublish', 'active', 'updatedAt']);
+      allow delete: if isValidId(memberId) && isAdmin();
+    }
+
+    match /accessSessions/{sessionId} {
+      allow get: if isValidId(sessionId) && isSignedIn() && (existing().userId == request.auth.uid || isPrimaryAdminEmail());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isPrimaryAdminEmail());
+      allow create: if isValidId(sessionId)
+        && isSignedIn()
+        && isValidAccessSession(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().sessionStartedAt == request.time
+        && incoming().lastSeenAt == request.time;
+      allow update: if isValidId(sessionId)
+        && isSignedIn()
+        && isValidAccessSession(incoming())
+        && incoming().userId == existing().userId
+        && incoming().userId == request.auth.uid
+        && incoming().deviceId == existing().deviceId
+        && incoming().sessionStartedAt == existing().sessionStartedAt
+        && incoming().lastSeenAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'accessType', 'deviceType', 'currentTab', 'activeCampus', 'isOnline', 'lastSeenAt']);
+      allow delete: if isValidId(sessionId) && isSignedIn() && (existing().userId == request.auth.uid || isPrimaryAdminEmail());
     }
   }
 }

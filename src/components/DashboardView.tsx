@@ -15,6 +15,8 @@ import {
   Play,
   Target,
   TrendingUp,
+  Users,
+  Video,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { isGeralMaterial } from '../data/alepaGeneralLibrary';
@@ -81,6 +83,8 @@ export function DashboardView({
 }: DashboardViewProps) {
   const {
     profile,
+    isAdmin,
+    accessSessions,
     topicProgressMap,
     disciplineGoalsMap,
     saveDisciplineWeeklyGoal,
@@ -90,6 +94,25 @@ export function DashboardView({
     materials,
     questions,
   } = useAuth();
+
+  const onlineNowCount = React.useMemo(() => {
+    const now = Date.now();
+    const activeUids = new Set<string>();
+    accessSessions.forEach((s) => {
+      const rawTs = s.lastSeenAt as { toMillis?: () => number; seconds?: number } | number | Date | undefined;
+      let ms = 0;
+      if (typeof rawTs === 'number') ms = rawTs;
+      else if (rawTs instanceof Date) ms = rawTs.getTime();
+      else if (rawTs && typeof rawTs === 'object') {
+        if (typeof rawTs.toMillis === 'function') ms = rawTs.toMillis();
+        else if (typeof rawTs.seconds === 'number') ms = rawTs.seconds * 1000;
+      }
+      if (s.isOnline && (ms === 0 || now - ms <= 180000)) {
+        activeUids.add(s.userId);
+      }
+    });
+    return activeUids.size;
+  }, [accessSessions]);
 
   const [goalDrafts, setGoalDrafts] = useState<Record<string, string>>({});
   const [savingGoalId, setSavingGoalId] = useState<string | null>(null);
@@ -458,12 +481,12 @@ export function DashboardView({
           </div>
         </div>
 
-        {/* Atalhos diretos para celular e PC: Geral | Conteúdo (com Disciplinas dentro) | Edital */}
-        <div className="grid grid-cols-3 gap-2 pt-1">
+        {/* Atalhos diretos para celular e PC: Geral | Conteúdo | Vídeos | Edital | Familiares */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
           <button
             type="button"
             onClick={() => (onOpenContent ? onOpenContent('geral') : onNavigate('materials'))}
-            className="min-h-[44px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:border-[#0B3321] hover:bg-emerald-50/50 text-left transition-colors"
+            className="min-h-[46px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:border-[#0B3321] hover:bg-emerald-50/50 text-left transition-colors"
           >
             <p className="text-xs font-bold text-[#0B3321] truncate">Aba Geral</p>
             <p className="text-[11px] text-slate-600 truncate">Matérias comuns</p>
@@ -475,18 +498,44 @@ export function DashboardView({
                 ? onOpenContent(isMedio ? 'medio' : 'superior')
                 : onNavigate('materials')
             }
-            className="min-h-[44px] px-3 py-2 rounded-xl border border-[#0B3321] bg-[#0B3321] hover:bg-[#134b32] text-white text-left transition-colors"
+            className="min-h-[46px] px-3 py-2 rounded-xl border border-[#0B3321] bg-[#0B3321] hover:bg-[#134b32] text-white text-left transition-colors"
           >
             <p className="text-xs font-bold truncate">Aba Conteúdo</p>
             <p className="text-[11px] text-emerald-200 truncate">{activeDisciplines.length} disciplinas</p>
           </button>
           <button
             type="button"
+            onClick={() => onNavigate('videos')}
+            className="min-h-[46px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:border-[#0B3321] hover:bg-emerald-50/50 text-left transition-colors"
+          >
+            <div className="flex items-center justify-between gap-1">
+              <p className="text-xs font-bold text-slate-900 truncate">Vídeos</p>
+              <Video className="w-3.5 h-3.5 text-[#146C43] shrink-0" />
+            </div>
+            <p className="text-[11px] text-slate-600 truncate">YouTube, IG, TikTok</p>
+          </button>
+          <button
+            type="button"
             onClick={() => onNavigate('disciplines')}
-            className="min-h-[44px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:border-[#0B3321] hover:bg-emerald-50/50 text-left transition-colors"
+            className="min-h-[46px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:border-[#0B3321] hover:bg-emerald-50/50 text-left transition-colors"
           >
             <p className="text-xs font-bold text-slate-900 truncate">Edital & Tópicos</p>
             <p className="text-[11px] text-slate-600 truncate">{syllabusPct}% concluído</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate('family')}
+            className="col-span-2 sm:col-span-1 min-h-[46px] px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:border-[#0B3321] text-left transition-colors"
+          >
+            <div className="flex items-center justify-between gap-1">
+              <p className="text-xs font-bold text-[#0B3321] truncate">Familiares</p>
+              <Users className="w-3.5 h-3.5 text-[#146C43] shrink-0" />
+            </div>
+            <p className="text-[11px] text-[#146C43] font-medium truncate">
+              {isAdmin
+                ? `${onlineNowCount} ${onlineNowCount === 1 ? 'pessoa online' : 'pessoas online'}`
+                : 'Acesso e conteúdos'}
+            </p>
           </button>
         </div>
 
