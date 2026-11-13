@@ -26,13 +26,14 @@ import {
   where,
 } from 'firebase/firestore';
 import {
-  ADMIN_EMAIL,
   OperationType,
   auth,
   db,
   googleAuthProvider,
   handleFirestoreError,
+  isAdminEmail,
   testFirestoreConnection,
+  workspaceAuthProvider,
 } from '../lib/firebase';
 import { CONCURSO_PROFILE } from '../data/alepaSyllabus';
 import { CETAP_QUESTIONS, DEFAULT_STUDY_MATERIALS } from '../data/alepaQuestions';
@@ -351,10 +352,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const userRef = doc(db, 'users', firebaseUser.uid);
         const snap = await getDoc(userRef);
+        const isTeacherAdmin =
+          Boolean(firebaseUser.emailVerified) && isAdminEmail(firebaseUser.email);
         if (!snap.exists()) {
-          const isTeacherAdmin =
-            Boolean(firebaseUser.emailVerified) &&
-            firebaseUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
           const newProfile = {
             uid: firebaseUser.uid,
             displayName: fallbackProfile.displayName,
@@ -366,6 +366,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             updatedAt: serverTimestamp(),
           };
           await setDoc(userRef, newProfile);
+        } else if (isTeacherAdmin && snap.data()?.role !== 'teacher') {
+          await updateDoc(userRef, {
+            role: 'teacher',
+            updatedAt: serverTimestamp(),
+          });
         }
       } catch (err) {
         console.error('Erro ao inicializar perfil:', err);
@@ -608,24 +613,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const current = auth.currentUser;
     const hasGoogleLinked = current?.providerData.some((p) => p.providerId === 'google.com');
 
-    googleAuthProvider.setCustomParameters({ prompt: 'consent select_account' });
+    workspaceAuthProvider.setCustomParameters({ prompt: 'consent select_account' });
     try {
       let result;
       if (current && hasGoogleLinked) {
-        result = await reauthenticateWithPopup(current, googleAuthProvider);
+        result = await reauthenticateWithPopup(current, workspaceAuthProvider);
       } else if (current) {
         try {
-          result = await linkWithPopup(current, googleAuthProvider);
+          result = await linkWithPopup(current, workspaceAuthProvider);
         } catch (linkErr: unknown) {
           const code = (linkErr as { code?: string })?.code || '';
           if (code === 'auth/credential-already-in-use' || code === 'auth/provider-already-linked') {
-            result = await signInWithPopup(auth, googleAuthProvider);
+            result = await signInWithPopup(auth, workspaceAuthProvider);
           } else {
             throw linkErr;
           }
         }
       } else {
-        result = await signInWithPopup(auth, googleAuthProvider);
+        result = await signInWithPopup(auth, workspaceAuthProvider);
       }
 
       const credential = GoogleAuthProvider.credentialFromResult(result);
@@ -636,7 +641,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setWorkspaceAccessToken(token);
       return token;
     } finally {
-      googleAuthProvider.setCustomParameters({});
+      workspaceAuthProvider.setCustomParameters({});
     }
   };
 
@@ -657,10 +662,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthRefreshTick((t) => t + 1);
       const userRef = doc(db, 'users', auth.currentUser.uid);
       const snap = await getDoc(userRef);
+      const isTeacherAdmin =
+        Boolean(auth.currentUser.emailVerified) && isAdminEmail(auth.currentUser.email);
       if (!snap.exists()) {
-        const isTeacherAdmin =
-          Boolean(auth.currentUser.emailVerified) &&
-          auth.currentUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
         await setDoc(userRef, {
           uid: auth.currentUser.uid,
           displayName: (
@@ -673,6 +677,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           examDate: CONCURSO_PROFILE.examDate,
           targetCargo: 'Cargo 03 – Técnico Legislativo (PL.AL.102)',
           createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else if (isTeacherAdmin && snap.data()?.role !== 'teacher') {
+        await updateDoc(userRef, {
+          role: 'teacher',
           updatedAt: serverTimestamp(),
         });
       }
@@ -1123,7 +1132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const current = ensureSignedIn();
     const isAdminUser =
-      Boolean(current.emailVerified) && current.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      Boolean(current.emailVerified) && isAdminEmail(current.email);
     const canShare = Boolean(input.isShared && isAdminUser);
     const path = `materials/${materialId}`;
     try {
@@ -1219,7 +1228,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const current = ensureSignedIn();
     const isAdminUser =
-      Boolean(current.emailVerified) && current.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      Boolean(current.emailVerified) && isAdminEmail(current.email);
     const canPublish = Boolean(input.isPublished && isAdminUser);
     const path = `sharedQuestions/${questionId}`;
     try {

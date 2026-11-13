@@ -22,9 +22,10 @@ import { ErrorNotebookView } from './components/ErrorNotebookView';
 import { MaterialsView } from './components/MaterialsView';
 import { PodcastsView } from './components/PodcastsView';
 import { PerformanceView } from './components/PerformanceView';
+import { OfflineIndicator, PWAInstallButton } from './components/PWAInstallButton';
 import { CONCURSO_PROFILE, formatDateKey } from './data/alepaSyllabus';
 import { useStudyAlert } from './hooks/useStudyAlert';
-import { CampusLevel, MedioCargoGroup, NavSection } from './types';
+import { CampusLevel, LibraryScope, MedioCargoGroup, NavSection } from './types';
 
 function CampusShell() {
   const {
@@ -59,6 +60,7 @@ function CampusShell() {
     }
   });
   const [timerPreset, setTimerPreset] = useState<{ disciplineId?: string; topicTitle?: string }>({});
+  const [contentInitialScope, setContentInitialScope] = useState<LibraryScope | undefined>(undefined);
 
   const handleChangeCampus = (campus: CampusLevel) => {
     setSelectedCampus(campus);
@@ -110,21 +112,21 @@ function CampusShell() {
   }
 
   const desktopNavItems: Array<{ id: NavSection; label: string }> = [
+    { id: 'materials', label: 'Conteúdo' },
     { id: 'disciplines', label: 'Disciplinas' },
     { id: 'schedule', label: 'Cronograma' },
     { id: 'simulados', label: 'Simulados' },
     { id: 'revisions', label: 'Revisões' },
     { id: 'podcasts', label: 'Podcasts' },
-    { id: 'materials', label: 'Materiais' },
   ];
 
   const mobileTabs: Array<{ id: NavSection; label: string; icon: React.ComponentType<{ className?: string }> }> = [
     { id: 'dashboard', label: 'Início', icon: Home },
-    { id: 'disciplines', label: 'Edital', icon: BookOpen },
+    { id: 'materials', label: 'Conteúdo', icon: FileText },
+    { id: 'disciplines', label: 'Disciplinas', icon: BookOpen },
     { id: 'schedule', label: '2h/dia', icon: CalendarDays },
     { id: 'simulados', label: 'Questões', icon: CheckSquare },
     { id: 'podcasts', label: 'Podcasts', icon: Headphones },
-    { id: 'materials', label: 'Arquivos', icon: FileText },
   ];
 
   const handleStartFocusTimer = (disciplineId: string, topicTitle: string) => {
@@ -136,11 +138,11 @@ function CampusShell() {
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
       {/* Desktop Top Bar (3-zone Contract) + Compact Mobile Header */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 md:h-16 flex items-center justify-between gap-8">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 md:h-16 flex items-center justify-between gap-2 sm:gap-8">
           <button
             type="button"
             onClick={() => setActiveTab('dashboard')}
-            className="font-display text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 text-left"
+            className="font-display text-base sm:text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 text-left"
           >
             Concurso ALEPA 2026
           </button>
@@ -162,12 +164,13 @@ function CampusShell() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <PWAInstallButton variant="header" />
             {isGuest && !user && (
               <button
                 type="button"
                 onClick={exitGuestMode}
-                className="min-h-[40px] px-3.5 py-2 text-xs font-semibold text-[#0B3321] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl whitespace-nowrap shrink-0"
+                className="min-h-[40px] px-3 sm:px-3.5 py-2 text-xs font-semibold text-[#0B3321] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl whitespace-nowrap shrink-0"
               >
                 Entrar / Nuvem
               </button>
@@ -204,7 +207,7 @@ function CampusShell() {
                 {activeTab === 'simulados' && 'Simulados'}
                 {activeTab === 'revisions' && 'Revisões'}
                 {activeTab === 'podcasts' && 'Podcasts'}
-                {activeTab === 'materials' && 'Materiais'}
+                {activeTab === 'materials' && 'Conteúdo & Disciplinas'}
                 {activeTab === 'performance' && 'Desempenho'}
               </span>
             </div>
@@ -318,6 +321,10 @@ function CampusShell() {
             medioCargoGroup={selectedMedioCargo}
             onChangeMedioCargoGroup={handleChangeMedioCargo}
             onNavigate={setActiveTab}
+            onOpenContent={(scope) => {
+              setContentInitialScope(scope);
+              setActiveTab('materials');
+            }}
             onStartFocusTimer={handleStartFocusTimer}
             alertSettings={alertSettings}
           />
@@ -348,7 +355,13 @@ function CampusShell() {
         )}
         {activeTab === 'revisions' && <ErrorNotebookView campus={selectedCampus} />}
         {activeTab === 'podcasts' && <PodcastsView campus={selectedCampus} />}
-        {activeTab === 'materials' && <MaterialsView campus={selectedCampus} />}
+        {activeTab === 'materials' && (
+          <MaterialsView
+            campus={selectedCampus}
+            initialScope={contentInitialScope}
+            onChangeCampus={handleChangeCampus}
+          />
+        )}
         {activeTab === 'performance' && (
           <PerformanceView campus={selectedCampus} medioCargoGroup={selectedMedioCargo} />
         )}
@@ -377,6 +390,7 @@ function CampusShell() {
           );
         })}
       </nav>
+      <OfflineIndicator />
     </div>
   );
 }

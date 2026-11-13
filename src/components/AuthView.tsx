@@ -4,6 +4,7 @@ import firebaseConfig from '../../firebase-applet-config.json';
 import bannerImg from '../assets/images/alepa_campus_banner_1794572280452.jpg';
 import emblemImg from '../assets/images/alepa_campus_emblem_1794572279329.jpg';
 import { useAuth } from '../contexts/AuthContext';
+import { OfflineIndicator, PWAInstallButton } from './PWAInstallButton';
 import { CONCURSO_PROFILE, getDaysUntilExam } from '../data/alepaSyllabus';
 import { UserRole } from '../types';
 
@@ -40,6 +41,9 @@ export function AuthView() {
     }
     if (code === 'auth/popup-closed-by-user') {
       return 'A janela de autenticação Google foi fechada antes de concluir.';
+    }
+    if (code === 'auth/unauthorized-domain') {
+      return 'Este domínio ainda não está autorizado no Firebase Authentication. Use "Entrar como Visitante (sem e-mail)" abaixo ou adicione este domínio nos domínios autorizados do Firebase.';
     }
     return err instanceof Error ? err.message : 'Não foi possível autenticar agora.';
   };
@@ -379,7 +383,7 @@ export function AuthView() {
                   d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
                 />
               </svg>
-              <span>Entrar com Google (nuvem + Drive)</span>
+              <span>Entrar com Google (nuvem)</span>
             </button>
 
             <button
@@ -394,9 +398,14 @@ export function AuthView() {
             <p className="text-[11px] text-center text-slate-500 leading-relaxed">
               No modo visitante você acessa todo o conteúdo imediatamente e seu progresso fica salvo neste navegador.
             </p>
+
+            <div className="pt-2 border-t border-slate-100">
+              <PWAInstallButton variant="auth" />
+            </div>
           </div>
         </div>
       </div>
+      <OfflineIndicator />
     </div>
   );
 }

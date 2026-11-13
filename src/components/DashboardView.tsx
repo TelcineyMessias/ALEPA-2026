@@ -34,7 +34,7 @@ import {
   getDaysUntilExam,
 } from '../data/alepaSyllabus';
 import { StudyAlertSettings } from '../hooks/useStudyAlert';
-import { CampusLevel, MedioCargoGroup, NavSection } from '../types';
+import { CampusLevel, LibraryScope, MedioCargoGroup, NavSection } from '../types';
 
 interface DashboardViewProps {
   campus: CampusLevel;
@@ -42,6 +42,7 @@ interface DashboardViewProps {
   medioCargoGroup: MedioCargoGroup;
   onChangeMedioCargoGroup: (group: MedioCargoGroup) => void;
   onNavigate: (section: NavSection) => void;
+  onOpenContent?: (scope: LibraryScope) => void;
   onStartFocusTimer: (disciplineId: string, topicTitle: string) => void;
   alertSettings: StudyAlertSettings;
 }
@@ -74,6 +75,7 @@ export function DashboardView({
   medioCargoGroup,
   onChangeMedioCargoGroup,
   onNavigate,
+  onOpenContent,
   onStartFocusTimer,
   alertSettings,
 }: DashboardViewProps) {
@@ -456,6 +458,38 @@ export function DashboardView({
           </div>
         </div>
 
+        {/* Atalhos diretos para celular e PC: Geral | Conteúdo (com Disciplinas dentro) | Edital */}
+        <div className="grid grid-cols-3 gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => (onOpenContent ? onOpenContent('geral') : onNavigate('materials'))}
+            className="min-h-[44px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:border-[#0B3321] hover:bg-emerald-50/50 text-left transition-colors"
+          >
+            <p className="text-xs font-bold text-[#0B3321] truncate">Aba Geral</p>
+            <p className="text-[11px] text-slate-600 truncate">Matérias comuns</p>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              onOpenContent
+                ? onOpenContent(isMedio ? 'medio' : 'superior')
+                : onNavigate('materials')
+            }
+            className="min-h-[44px] px-3 py-2 rounded-xl border border-[#0B3321] bg-[#0B3321] hover:bg-[#134b32] text-white text-left transition-colors"
+          >
+            <p className="text-xs font-bold truncate">Aba Conteúdo</p>
+            <p className="text-[11px] text-emerald-200 truncate">{activeDisciplines.length} disciplinas</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate('disciplines')}
+            className="min-h-[44px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:border-[#0B3321] hover:bg-emerald-50/50 text-left transition-colors"
+          >
+            <p className="text-xs font-bold text-slate-900 truncate">Edital & Tópicos</p>
+            <p className="text-[11px] text-slate-600 truncate">{syllabusPct}% concluído</p>
+          </button>
+        </div>
+
         {/* Active Campus Deep Forest Green Hero Banner */}
         <section className="bg-[#0B3321] text-white rounded-2xl p-6 sm:p-7 flex flex-col justify-between">
           <div className="flex items-start justify-between gap-4">
@@ -464,7 +498,7 @@ export function DashboardView({
                 {isMedio
                   ? `${MEDIO_CONCURSO_PROFILE.editalNumber} · Campus Nível Médio`
                   : `${CONCURSO_PROFILE.editalNumber} · Campus Nível Superior`}{' '}
-                · {profile?.role === 'teacher' ? 'Área do Professor' : 'Área do Estudante'}
+                · {profile?.role === 'teacher' ? 'Acesso Admin / Publicação' : 'Área do Estudante'}
               </p>
               <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
                 {isMedio

@@ -241,7 +241,15 @@ function driveItemToStudyMaterial(item: DriveItem): StudyMaterial {
   };
 }
 
-export function MaterialsView({ campus }: { campus: CampusLevel }) {
+export function MaterialsView({
+  campus,
+  initialScope,
+  onChangeCampus,
+}: {
+  campus: CampusLevel;
+  initialScope?: LibraryScope;
+  onChangeCampus?: (campus: CampusLevel) => void;
+}) {
   const {
     materials,
     addMaterial,
@@ -254,8 +262,12 @@ export function MaterialsView({ campus }: { campus: CampusLevel }) {
   } = useAuth();
 
   const isMedio = campus === 'medio';
-  const [libraryScope, setLibraryScope] = useState<LibraryScope>(isMedio ? 'medio' : 'superior');
+  const [libraryScope, setLibraryScope] = useState<LibraryScope>(
+    initialScope || (isMedio ? 'medio' : 'superior')
+  );
   const [showOrgMatrix, setShowOrgMatrix] = useState<boolean>(false);
+  const [showDriveTools, setShowDriveTools] = useState<boolean>(false);
+  const [showOfficialSources, setShowOfficialSources] = useState<boolean>(false);
 
   const activeCategories =
     libraryScope === 'geral'
@@ -288,14 +300,18 @@ export function MaterialsView({ campus }: { campus: CampusLevel }) {
   const [categoryId, setCategoryId] = useState<LibraryCategoryId>(activeCategories[0].id);
 
   useEffect(() => {
-    const targetScope: LibraryScope = isMedio ? 'medio' : 'superior';
+    const targetScope: LibraryScope = initialScope || (isMedio ? 'medio' : 'superior');
     setLibraryScope(targetScope);
     setModalScope(targetScope);
     setSelectedCategory('all');
     setCategoryId(
-      targetScope === 'medio' ? MEDIO_LIBRARY_CATEGORIES[0].id : LIBRARY_CATEGORIES[5].id
+      targetScope === 'geral'
+        ? GERAL_LIBRARY_CATEGORIES[0].id
+        : targetScope === 'medio'
+          ? MEDIO_LIBRARY_CATEGORIES[0].id
+          : LIBRARY_CATEGORIES[5].id
     );
-  }, [isMedio]);
+  }, [isMedio, initialScope]);
 
   const modalCategories =
     modalScope === 'geral'
@@ -857,180 +873,252 @@ export function MaterialsView({ campus }: { campus: CampusLevel }) {
   const isViewerFolder = viewerParsed?.kind === 'folder';
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+    <div className="space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
           <p className="text-xs font-medium text-emerald-800">
             {libraryScope === 'geral'
-              ? 'Biblioteca Geral · Materiais comuns aos dois níveis (tópicos coincidentes e núcleo normativo base)'
+              ? 'Aba Geral · Matérias comuns aos 2 níveis'
               : libraryScope === 'medio'
-                ? 'ALEPA 2026 – Nível Médio · Cargo 04 – Assistência Administrativa (PL.AL.060) · Conteúdos específicos'
-                : 'ALEPA 2026 – Nível Superior · Cargo 03 – Técnico Legislativo (PL.AL.102) · Conteúdos específicos'}
+                ? 'Aba Conteúdo · Nível Médio (Cargo 04 · PL.AL.060)'
+                : 'Aba Conteúdo · Nível Superior (Cargo 03 · PL.AL.102)'}
           </p>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 mt-1">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 mt-0.5">
             {libraryScope === 'geral'
-              ? 'Biblioteca Geral (Comum aos 2 Níveis)'
+              ? 'Geral · Disciplinas Comuns'
               : libraryScope === 'medio'
-                ? 'Biblioteca Nível Médio (Cargo 04 · PL.AL.060)'
-                : 'Biblioteca Nível Superior (Cargo 03 · PL.AL.102)'}
+                ? 'Conteúdo · Nível Médio'
+                : 'Conteúdo · Nível Superior'}
           </h1>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setModalScope(libraryScope);
-            setCategoryId(activeCategories[0].id);
-            setShowAddModal(true);
-          }}
-          className="min-h-[44px] px-4 py-2 bg-[#0B3321] hover:bg-[#134b32] text-white text-sm font-semibold rounded-xl inline-flex items-center gap-2 whitespace-nowrap shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Catalogar material ou pasta</span>
-        </button>
-      </div>
-
-      {/* Organização Recomendada das 3 Bibliotecas (Geral × Superior × Médio) */}
-      <section className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div>
-            <h2 className="font-display text-sm sm:text-base font-bold text-slate-900">
-              Estrutura da Biblioteca: Geral + Específicas por Cargo
-            </h2>
-            <p className="text-xs text-slate-600">
-              Materiais comuns ficam na Biblioteca Geral; conteúdos específicos e simulados seguem separados por edital e nível de cobrança.
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => setShowOrgMatrix((v) => !v)}
-            className="min-h-[38px] px-3.5 py-1.5 border border-slate-300 hover:border-[#0B3321] bg-slate-50 text-slate-800 text-xs font-semibold rounded-xl whitespace-nowrap self-start lg:self-auto"
+            onClick={() => setShowOfficialSources((v) => !v)}
+            className={`min-h-[42px] px-3 py-2 border text-xs sm:text-sm font-semibold rounded-xl inline-flex items-center gap-1.5 whitespace-nowrap ${
+              showOfficialSources
+                ? 'border-[#0B3321] bg-emerald-50 text-[#0B3321]'
+                : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-800'
+            }`}
           >
-            {showOrgMatrix ? 'Ocultar matriz de disciplinas' : 'Ver matriz: o que compartilhar por disciplina'}
+            <Scale className="w-4 h-4 text-[#146C43]" />
+            <span>Fontes</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowDriveTools((v) => !v)}
+            className={`min-h-[42px] px-3.5 py-2 border text-xs sm:text-sm font-semibold rounded-xl inline-flex items-center gap-2 whitespace-nowrap ${
+              showDriveTools
+                ? 'border-[#0B3321] bg-emerald-50 text-[#0B3321]'
+                : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-800'
+            }`}
+          >
+            <FolderOpen className="w-4 h-4 text-[#146C43]" />
+            <span>{showDriveTools ? 'Ocultar Drive' : 'Google Drive'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setModalScope(libraryScope);
+              const selectedCat =
+                selectedCategory !== 'all'
+                  ? activeCategories.find((c) => c.id === selectedCategory)
+                  : undefined;
+              setCategoryId(selectedCat ? selectedCat.id : activeCategories[0].id);
+              setShowAddModal(true);
+            }}
+            className="min-h-[42px] px-4 py-2 bg-[#0B3321] hover:bg-[#134b32] text-white text-xs sm:text-sm font-semibold rounded-xl inline-flex items-center gap-2 whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Incluir conteúdo</span>
           </button>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {/* Abas Principais: Geral × Conteúdo (com escolha Superior / Médio dentro de Conteúdo) */}
+      <section className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 space-y-3">
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => handleChangeScope('geral')}
-            className={`text-left p-4 rounded-xl border transition-colors flex flex-col justify-between gap-1.5 ${
+            className={`min-h-[54px] px-3.5 py-2.5 rounded-xl border text-left transition-colors flex items-center justify-between gap-2 ${
               libraryScope === 'geral'
                 ? 'border-[#0B3321] bg-[#0B3321] text-white'
-                : 'border-slate-200 bg-slate-50/70 hover:border-slate-300 text-slate-900'
+                : 'border-slate-200 bg-slate-50 hover:border-slate-300 text-slate-900'
             }`}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className={`text-xs font-semibold ${libraryScope === 'geral' ? 'text-emerald-300' : 'text-[#146C43]'}`}>
-                Comum aos 2 níveis
-              </span>
-              <span className={`font-mono text-xs tabular-nums ${libraryScope === 'geral' ? 'text-emerald-200' : 'text-slate-500'}`}>
-                {geralMaterials.length} itens
-              </span>
+            <div className="min-w-0">
+              <p className="font-display text-sm sm:text-base font-bold truncate">Geral</p>
+              <p className={`text-[11px] truncate ${libraryScope === 'geral' ? 'text-emerald-200' : 'text-slate-500'}`}>
+                Matérias comuns ({geralMaterials.length})
+              </p>
             </div>
-            <p className="font-display text-base font-bold">Biblioteca Geral</p>
-            <p className={`text-xs ${libraryScope === 'geral' ? 'text-emerald-100/90' : 'text-slate-600'}`}>
-              Português, Raciocínio Lógico, Informática (coincidentes) e base normativa comum.
-            </p>
+            <span
+              className={`font-mono text-xs font-bold shrink-0 ${
+                libraryScope === 'geral' ? 'text-emerald-300' : 'text-[#146C43]'
+              }`}
+            >
+              {GERAL_LIBRARY_CATEGORIES.length} disc.
+            </span>
           </button>
 
           <button
             type="button"
-            onClick={() => handleChangeScope('superior')}
-            className={`text-left p-4 rounded-xl border transition-colors flex flex-col justify-between gap-1.5 ${
-              libraryScope === 'superior'
+            onClick={() => handleChangeScope(isMedio ? 'medio' : 'superior')}
+            className={`min-h-[54px] px-3.5 py-2.5 rounded-xl border text-left transition-colors flex items-center justify-between gap-2 ${
+              libraryScope !== 'geral'
                 ? 'border-[#0B3321] bg-[#0B3321] text-white'
-                : 'border-slate-200 bg-slate-50/70 hover:border-slate-300 text-slate-900'
+                : 'border-slate-200 bg-slate-50 hover:border-slate-300 text-slate-900'
             }`}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className={`text-xs font-semibold ${libraryScope === 'superior' ? 'text-emerald-300' : 'text-[#146C43]'}`}>
-                Específico · Cargo 03
-              </span>
-              <span className={`font-mono text-xs tabular-nums ${libraryScope === 'superior' ? 'text-emerald-200' : 'text-slate-500'}`}>
-                {superiorMaterials.length} itens
-              </span>
+            <div className="min-w-0">
+              <p className="font-display text-sm sm:text-base font-bold truncate">Conteúdo</p>
+              <p className={`text-[11px] truncate ${libraryScope !== 'geral' ? 'text-emerald-200' : 'text-slate-500'}`}>
+                {libraryScope === 'medio' || (libraryScope === 'geral' && isMedio)
+                  ? `Nível Médio (${medioMaterials.length})`
+                  : `Nível Superior (${superiorMaterials.length})`}
+              </p>
             </div>
-            <p className="font-display text-base font-bold">Biblioteca Nível Superior</p>
-            <p className={`text-xs ${libraryScope === 'superior' ? 'text-emerald-100/90' : 'text-slate-600'}`}>
-              Conteúdos específicos do Cargo 03 – Técnico Legislativo (PL.AL.102).
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleChangeScope('medio')}
-            className={`text-left p-4 rounded-xl border transition-colors flex flex-col justify-between gap-1.5 ${
-              libraryScope === 'medio'
-                ? 'border-[#0B3321] bg-[#0B3321] text-white'
-                : 'border-slate-200 bg-slate-50/70 hover:border-slate-300 text-slate-900'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className={`text-xs font-semibold ${libraryScope === 'medio' ? 'text-emerald-300' : 'text-[#146C43]'}`}>
-                Específico · Cargo 04
-              </span>
-              <span className={`font-mono text-xs tabular-nums ${libraryScope === 'medio' ? 'text-emerald-200' : 'text-slate-500'}`}>
-                {medioMaterials.length} itens
-              </span>
-            </div>
-            <p className="font-display text-base font-bold">Biblioteca Nível Médio</p>
-            <p className={`text-xs ${libraryScope === 'medio' ? 'text-emerald-100/90' : 'text-slate-600'}`}>
-              Conteúdos específicos do Cargo 04 – Assistência Administrativa (PL.AL.060).
-            </p>
+            <span
+              className={`font-mono text-xs font-bold shrink-0 ${
+                libraryScope !== 'geral' ? 'text-emerald-300' : 'text-[#146C43]'
+              }`}
+            >
+              {isMedio ? MEDIO_LIBRARY_CATEGORIES.length : LIBRARY_CATEGORIES.length} disc.
+            </span>
           </button>
         </div>
 
-        {(showOrgMatrix || libraryScope === 'geral') && (
-          <div className="pt-3 border-t border-slate-100 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-              {CAMPUS_LIBRARY_RECOMMENDATIONS.map((rec) => (
-                <div key={rec.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                  <p className="text-xs font-bold text-[#0B3321]">{rec.title}</p>
-                  <p className="text-[11px] text-slate-600 leading-relaxed">{rec.description}</p>
-                </div>
-              ))}
+        {/* Seletor rápido de Cargo dentro da Aba Conteúdo */}
+        {libraryScope !== 'geral' && (
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  handleChangeScope('superior');
+                  onChangeCampus?.('superior');
+                }}
+                className={`min-h-[36px] px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                  libraryScope === 'superior' ? 'bg-white text-[#0B3321] shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Superior · Cargo 03 ({superiorMaterials.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleChangeScope('medio');
+                  onChangeCampus?.('medio');
+                }}
+                className={`min-h-[36px] px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                  libraryScope === 'medio' ? 'bg-white text-[#0B3321] shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Médio · Cargo 04 ({medioMaterials.length})
+              </button>
             </div>
 
-            <div className="overflow-x-auto border border-slate-200 rounded-xl">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-700">
-                    <th className="py-2.5 px-3 font-semibold">Disciplina</th>
-                    <th className="py-2.5 px-3 font-semibold">Compartilhamento</th>
-                    <th className="py-2.5 px-3 font-semibold">Onde organizar</th>
-                    <th className="py-2.5 px-3 font-semibold">Critério prático</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {CAMPUS_ORGANIZATION_MATRIX.map((row) => (
-                    <tr key={row.discipline} className="hover:bg-slate-50/70">
-                      <td className="py-2.5 px-3 font-semibold text-slate-900 whitespace-nowrap">{row.discipline}</td>
-                      <td
-                        className={`py-2.5 px-3 font-semibold whitespace-nowrap ${
-                          row.kind === 'sim'
-                            ? 'text-[#146C43]'
-                            : row.kind === 'parcial'
-                              ? 'text-amber-800'
-                              : 'text-red-800'
-                        }`}
-                      >
-                        {row.ruleLabel}
-                      </td>
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-slate-700 whitespace-nowrap">
-                        {row.libraryPlacement}
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-600">{row.guidance}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowOrgMatrix((v) => !v)}
+              className="text-xs font-semibold text-[#0B3321] hover:underline"
+            >
+              {showOrgMatrix ? 'Ocultar matriz' : 'Ver matriz de compartilhamento'}
+            </button>
           </div>
         )}
       </section>
 
-      {/* Google Drive, Planilhas, PowerPoint & Pasta de Acesso */}
+      {/* Disciplinas DENTRO da Aba Geral ou DENTRO da Aba Conteúdo (visível imediatamente no celular) */}
+      <section className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-[11px] font-semibold text-[#146C43]">
+              {libraryScope === 'geral'
+                ? 'Disciplinas dentro de Geral (comum aos 2 níveis)'
+                : libraryScope === 'medio'
+                  ? 'Disciplinas dentro de Conteúdo · Nível Médio (PL.AL.060)'
+                  : 'Disciplinas dentro de Conteúdo · Nível Superior (PL.AL.102)'}
+            </p>
+            <h2 className="font-display text-base sm:text-lg font-bold text-slate-900">
+              Escolha a Disciplina ({activeCategories.length})
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {selectedCategory !== 'all' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalScope(libraryScope);
+                    setCategoryId(selectedCategory);
+                    setShowAddModal(true);
+                  }}
+                  className="min-h-[34px] px-3 py-1 bg-emerald-50 border border-emerald-200 text-[#0B3321] text-xs font-semibold rounded-lg inline-flex items-center gap-1 whitespace-nowrap"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Incluir nesta disciplina</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory('all')}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline whitespace-nowrap"
+                >
+                  Ver todas
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2.5">
+          {activeCategories.map((cat) => {
+            const isSelected = selectedCategory === cat.id;
+            const countInCat = campusMaterials.filter((m) =>
+              m.libraryCategoryId ? m.libraryCategoryId === cat.id : m.disciplineId === cat.disciplineId
+            ).length;
+            const sharingLabel = 'sharingLabel' in cat ? String((cat as { sharingLabel?: string }).sharingLabel) : null;
+
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCategory(isSelected ? 'all' : cat.id)}
+                className={`text-left p-3 rounded-xl border transition-colors flex flex-col justify-between gap-1.5 min-h-[86px] ${
+                  isSelected
+                    ? 'border-[#0B3321] bg-[#0B3321] text-white'
+                    : 'border-slate-200 bg-slate-50/60 hover:border-slate-300 text-slate-900'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1.5 font-mono text-[10px] tabular-nums">
+                  <span className={isSelected ? 'text-emerald-200 font-bold' : 'text-[#0B3321] font-bold'}>
+                    {String(cat.order).padStart(2, '0')}
+                  </span>
+                  <span className={isSelected ? 'text-emerald-200' : 'text-slate-500'}>
+                    {countInCat} {countInCat === 1 ? 'item' : 'itens'}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs font-bold leading-snug line-clamp-2">{cat.title}</p>
+                  {sharingLabel && (
+                    <p className={`text-[10px] font-semibold mt-0.5 truncate ${isSelected ? 'text-emerald-300' : 'text-[#146C43]'}`}>
+                      {sharingLabel}
+                    </p>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Google Drive, Planilhas, PowerPoint & Pasta de Acesso (visível quando ativado pelo usuário) */}
+      {(showDriveTools || driveBrowserOpen) && (
       <section className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -1370,166 +1458,65 @@ export function MaterialsView({ campus }: { campus: CampusLevel }) {
           </div>
         )}
       </section>
+      )}
 
-      {/* Estrutura das Categorias da Biblioteca Digital */}
-      <section className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <p className="text-xs font-medium text-emerald-800">
-              {libraryScope === 'geral'
-                ? 'Biblioteca Geral · Tópicos coincidentes e núcleo normativo compartilhado'
-                : libraryScope === 'medio'
-                  ? 'Classificação do Cargo 04 – Auxiliar Técnico Legislativo (PL.AL.060)'
-                  : 'Classificação do Cargo 03 – Técnico Legislativo (PL.AL.102)'}
-            </p>
-            <h2 className="font-display text-lg font-bold text-slate-900">
-              {libraryScope === 'geral'
-                ? '8 Disciplinas Comuns / Parciais da Biblioteca Geral'
-                : libraryScope === 'medio'
-                  ? '11 Disciplinas da Biblioteca (Nível Médio · Anexo II)'
-                  : '10 Disciplinas e Categorias da Biblioteca Digital'}
+      {/* Matriz de Organização quando solicitada */}
+      {showOrgMatrix && (
+        <section className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-display text-sm sm:text-base font-bold text-slate-900">
+              Matriz: O que compartilhar na Biblioteca Geral × Específicas
             </h2>
-          </div>
-
-          {selectedCategory !== 'all' && (
             <button
               type="button"
-              onClick={() => setSelectedCategory('all')}
-              className="text-xs font-semibold text-[#0B3321] hover:underline whitespace-nowrap"
+              onClick={() => setShowOrgMatrix(false)}
+              className="text-xs font-semibold text-slate-600 hover:underline"
             >
-              Ver todas as {activeCategories.length} categorias
+              Fechar
             </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-          {activeCategories.map((cat) => {
-            const isSelected = selectedCategory === cat.id;
-            const countInCat = campusMaterials.filter((m) =>
-              m.libraryCategoryId ? m.libraryCategoryId === cat.id : m.disciplineId === cat.disciplineId
-            ).length;
-            const sharingLabel = 'sharingLabel' in cat ? String((cat as { sharingLabel?: string }).sharingLabel) : null;
-
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setSelectedCategory(isSelected ? 'all' : cat.id)}
-                className={`text-left p-3.5 rounded-xl border transition-colors flex flex-col justify-between gap-2 ${
-                  isSelected
-                    ? 'border-[#0B3321] bg-[#0B3321] text-white'
-                    : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 text-slate-900'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2 font-mono text-[11px] tabular-nums">
-                  <span className={isSelected ? 'text-emerald-200 font-bold' : 'text-[#0B3321] font-bold'}>
-                    {String(cat.order).padStart(2, '0')}
-                  </span>
-                  <span className={isSelected ? 'text-emerald-200' : 'text-slate-500'}>
-                    {countInCat} {countInCat === 1 ? 'item' : 'itens'}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-xs font-bold leading-snug">{cat.title}</p>
-                  {sharingLabel && (
-                    <p className={`text-[10px] font-semibold mt-0.5 ${isSelected ? 'text-emerald-300' : 'text-[#146C43]'}`}>
-                      {sharingLabel}
-                    </p>
-                  )}
-                  <p className={`text-[11px] mt-1 line-clamp-2 ${isSelected ? 'text-emerald-100/90' : 'text-slate-500'}`}>
-                    {cat.description}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Fontes Prioritárias (Nível Médio / Geral) ou Portais F01-F06 (Nível Superior) */}
-      {libraryScope === 'medio' || libraryScope === 'geral' ? (
-        <section className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-4">
-          <div>
-            <p className="text-xs font-medium text-emerald-800">
-              Fontes prioritárias para Nível Médio – Cargo 04 (PL.AL.060)
-            </p>
-            <h2 className="font-display text-lg font-bold text-slate-900">
-              Fontes Prioritárias Oficiais (CETAP, ALEPA, ENAP, Câmara, Senado, Arquivo Nacional e Planalto)
-            </h2>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            {MEDIO_PRIORITY_SOURCES.map((src) => (
-              <article
-                key={src.code}
-                className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between gap-3 bg-slate-50/40"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-2 text-[11px]">
-                    <span className="font-mono font-semibold text-[#0B3321]">{src.code}</span>
-                    <span className="font-semibold text-[#146C43]">{src.application}</span>
-                  </div>
-                  <h3 className="font-display text-base font-bold text-slate-900">{src.institution}</h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">{src.description}</p>
-                </div>
-
-                <a
-                  href={src.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="min-h-[38px] px-3 py-1.5 bg-white border border-slate-300 hover:border-[#0B3321] text-slate-800 text-xs font-semibold rounded-lg inline-flex items-center justify-between gap-1.5"
-                >
-                  <span className="truncate">{src.actionLabel}</span>
-                  <ExternalLink className="w-3.5 h-3.5 text-[#146C43] shrink-0" />
-                </a>
-              </article>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+            {CAMPUS_LIBRARY_RECOMMENDATIONS.map((rec) => (
+              <div key={rec.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                <p className="text-xs font-bold text-[#0B3321]">{rec.title}</p>
+                <p className="text-[11px] text-slate-600 leading-relaxed">{rec.description}</p>
+              </div>
             ))}
           </div>
-        </section>
-      ) : (
-        <section className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-4">
-          <div>
-            <p className="text-xs font-medium text-emerald-800">Fontes públicas e repositórios institucionais</p>
-            <h2 className="font-display text-lg font-bold text-slate-900">
-              Fontes Oficiais Cadastradas (F01 – F06)
-            </h2>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {OFFICIAL_PORTAL_LINKS.map((portal) => (
-              <article
-                key={portal.code}
-                className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between gap-3 bg-slate-50/40"
-              >
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
-                    <span className="font-mono font-semibold text-[#0B3321]">
-                      {portal.code} · {portal.institution}
-                    </span>
-                    {portal.priorityTag && (
-                      <span className="font-semibold text-emerald-800">{portal.priorityTag}</span>
-                    )}
-                  </div>
-                  <h3 className="font-display text-base font-bold text-slate-900">{portal.title}</h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">{portal.description}</p>
-                </div>
-
-                <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200/80">
-                  {portal.links.map((link) => (
-                    <a
-                      key={link.url}
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="min-h-[38px] px-3 py-1.5 bg-white border border-slate-300 hover:border-[#0B3321] text-slate-800 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5"
+          <div className="overflow-x-auto border border-slate-200 rounded-xl">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-700">
+                  <th className="py-2.5 px-3 font-semibold">Disciplina</th>
+                  <th className="py-2.5 px-3 font-semibold">Compartilhamento</th>
+                  <th className="py-2.5 px-3 font-semibold">Onde organizar</th>
+                  <th className="py-2.5 px-3 font-semibold">Critério prático</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {CAMPUS_ORGANIZATION_MATRIX.map((row) => (
+                  <tr key={row.discipline} className="hover:bg-slate-50/70">
+                    <td className="py-2.5 px-3 font-semibold text-slate-900 whitespace-nowrap">{row.discipline}</td>
+                    <td
+                      className={`py-2.5 px-3 font-semibold whitespace-nowrap ${
+                        row.kind === 'sim'
+                          ? 'text-[#146C43]'
+                          : row.kind === 'parcial'
+                            ? 'text-amber-800'
+                            : 'text-red-800'
+                      }`}
                     >
-                      <span>{link.label}</span>
-                      <ExternalLink className="w-3.5 h-3.5 text-[#146C43] shrink-0" />
-                    </a>
-                  ))}
-                </div>
-              </article>
-            ))}
+                      {row.ruleLabel}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-[11px] text-slate-700 whitespace-nowrap">
+                      {row.libraryPlacement}
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-600">{row.guidance}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
       )}
@@ -1705,6 +1692,82 @@ export function MaterialsView({ campus }: { campus: CampusLevel }) {
             );
           })}
         </div>
+      )}
+
+      {/* Fontes Oficiais e Repositórios Prioritários (sob demanda via botão Fontes) */}
+      {showOfficialSources && (
+        <section className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-semibold text-[#146C43]">Portais Verificados</p>
+              <h2 className="font-display text-base sm:text-lg font-bold text-slate-900">
+                {libraryScope === 'medio'
+                  ? 'Fontes Prioritárias · Nível Médio (F01 a F05)'
+                  : 'Fontes Oficiais · CETAP, ALEPA e Planalto'}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowOfficialSources(false)}
+              className="text-xs font-semibold text-slate-600 hover:underline"
+            >
+              Fechar
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {libraryScope === 'medio'
+              ? MEDIO_PRIORITY_SOURCES.map((source) => (
+                  <a
+                    key={source.code}
+                    href={source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-3.5 rounded-xl border border-slate-200 hover:border-[#0B3321] bg-slate-50/70 hover:bg-emerald-50/30 transition-colors flex flex-col justify-between gap-2"
+                  >
+                    <div>
+                      <p className="text-[11px] font-mono font-bold text-[#146C43]">
+                        {source.code} · {source.institution}
+                      </p>
+                      <p className="text-xs font-bold text-slate-900 mt-0.5">{source.application}</p>
+                      <p className="text-[11px] text-slate-600 mt-1 line-clamp-2">{source.description}</p>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0B3321]">
+                      <span>{source.actionLabel}</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </span>
+                  </a>
+                ))
+              : OFFICIAL_PORTAL_LINKS.map((portal) => (
+                  <div
+                    key={portal.code}
+                    className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-2"
+                  >
+                    <div>
+                      <p className="text-[11px] font-mono font-bold text-[#146C43]">
+                        {portal.code} · {portal.institution}
+                      </p>
+                      <p className="text-xs font-bold text-slate-900 mt-0.5">{portal.title}</p>
+                      <p className="text-[11px] text-slate-600 mt-1 line-clamp-2">{portal.description}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {portal.links.map((lnk) => (
+                        <a
+                          key={lnk.url}
+                          href={lnk.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0B3321] hover:underline"
+                        >
+                          <span>{lnk.label}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+          </div>
+        </section>
       )}
 
       {/* Integrated File, Google Drive Folder, Google Sheets & Google Slides / PowerPoint Viewer Modal */}
