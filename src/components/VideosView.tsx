@@ -30,6 +30,13 @@ interface VideoPlayerTarget {
   thumbnailUrl: string | null;
 }
 
+export function normalizeVideoUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 export function extractYouTubeId(rawUrl: string): string | null {
   const url = rawUrl.trim();
   if (!url) return null;
@@ -323,7 +330,10 @@ export function VideosView({ campus }: { campus: CampusLevel }) {
   }, [videoMaterials, selectedCategory, activeCategories, platformFilter]);
 
   const activePlayer = activeVideo ? parseVideoEmbed(activeVideo.url, activeVideo.institution) : null;
-  const formUrlPreview = useMemo(() => parseVideoEmbed(videoUrl, channelName), [videoUrl, channelName]);
+  const formUrlPreview = useMemo(
+    () => parseVideoEmbed(normalizeVideoUrl(videoUrl), channelName),
+    [videoUrl, channelName]
+  );
 
   const handleOpenPlayer = (vid: StudyMaterial) => {
     setActiveVideo(vid);
@@ -337,10 +347,17 @@ export function VideosView({ campus }: { campus: CampusLevel }) {
     setSubmitting(true);
     setFeedback(null);
     try {
-      const cleanUrl = videoUrl.trim();
+      const cleanUrl = normalizeVideoUrl(videoUrl);
       if (!cleanUrl) {
         throw new Error('Cole o link do vídeo (YouTube, Instagram, TikTok ou outro link).');
       }
+      try {
+        // Validate URL syntax before saving to Firestore
+        new URL(cleanUrl);
+      } catch {
+        throw new Error('Informe um link válido (ex.: https://www.youtube.com/watch?v=...).');
+      }
+
       const parsed = parseVideoEmbed(cleanUrl, channelName.trim());
       const selectedCat = formCategories.find((c) => c.id === categoryId) || formCategories[0];
 
@@ -370,11 +387,21 @@ export function VideosView({ campus }: { campus: CampusLevel }) {
       }
       setFeedback(
         canPublishShared && isShared
-          ? `Vídeo (${parsed.platformLabel}) salvo com ícone e botão Play visíveis para todos!`
-          : 'Vídeo salvo na sua lista local. Para aparecer para todos, entre com conta Google ou Familiar autorizado.'
+          ? `Vídeo (${parsed.platformLabel}) salvo no banco de dados e visível para todos!`
+          : user
+            ? `Vídeo (${parsed.platformLabel}) salvo na sua conta no banco de dados!`
+            : 'Vídeo salvo localmente neste aparelho. Entre com sua conta Google para salvar na nuvem e compartilhar com todos.'
       );
     } catch (err) {
-      setFeedback(err instanceof Error ? err.message : 'Erro ao salvar vídeo.');
+      let friendly = 'Erro ao salvar vídeo no banco de dados.';
+      if (err instanceof Error) {
+        if (err.message.startsWith('{')) {
+          friendly = 'Não foi possível salvar no Firestore. Verifique sua conexão e permissões da conta.';
+        } else {
+          friendly = err.message;
+        }
+      }
+      setFeedback(friendly);
     } finally {
       setSubmitting(false);
     }
@@ -444,26 +471,39 @@ export function VideosView({ campus }: { campus: CampusLevel }) {
           </div>
 
           {activePlayer.platform === 'direct' && activePlayer.embedUrl ? (
-            <video
-              controls
-              playsInline
-              autoPlay
-              src={activePlayer.embedUrl}
-              className="w-full max-h-[460px] rounded-xl bg-black"
-            />
+            <div className="relative w-full aspect-video max-h-[520px] rounded-xl overflow-hidden bg-black">
+              <video
+                key={activeVideo.id}
+                controls
+                playsInline
+                autoPlay
+                src={activePlayer.embedUrl}
+                className="w-full h-full object-contain bg-black"
+              />
+            </div>
           ) : activePlayer.embedUrl ? (
             <div className="w-full flex justify-center bg-black rounded-xl overflow-hidden">
-              <iframe
-                title={activeVideo.title}
-                src={activePlayer.embedUrl}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                className={
-                  activePlayer.platform === 'tiktok' || activePlayer.platform === 'instagram'
-                    ? 'w-full max-w-[420px] h-[520px] border-0 bg-white'
-                    : 'w-full aspect-video max-h-[480px] border-0'
-                }
-              />
+              {activePlayer.platform === 'tiktok' || activePlayer.platform === 'instagram' ? (
+                <iframe
+                  key={activeVideo.id}
+                  title={activeVideo.title}
+                  src={activePlayer.embedUrl}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  className="w-full max-w-[400px] h-[min(540px,70vh)] border-0 bg-white"
+                />
+              ) : (
+                <div className="relative w-full aspect-video max-h-[520px]">
+                  <iframe
+                    key={activeVideo.id}
+                    title={activeVideo.title}
+                    src={activePlayer.embedUrl}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="absolute inset-0 w-full h-full border-0"
+                  />
+                </div>
+              )}
             </div>
           ) : (
             <div className="p-6 rounded-xl bg-slate-800/80 text-center space-y-3">
@@ -510,7 +550,8 @@ export function VideosView({ campus }: { campus: CampusLevel }) {
                   Link do vídeo (YouTube, Instagram, TikTok, Drive, MP4, etc.)
                 </label>
                 <input
-                  type="url"
+                  type="text"
+                  inputMode="url"
                   required
                   value={videoUrl}
                   onChange={(e) => setVideoUrl(e.target.value)}
@@ -520,13 +561,14 @@ export function VideosView({ campus }: { campus: CampusLevel }) {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Título do vídeo / aula</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Título do vídeo / aula (opcional)
+                </label>
                 <input
                   type="text"
-                  required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Ex.: Dica rápida de Processo Legislativo · CETAP"
+                  placeholder="Ex.: Dica rápida de Processo Legislativo (ou deixe vazio)"
                   className="w-full min-h-[42px] px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B3321]"
                 />
               </div>
@@ -865,7 +907,18 @@ export function VideosView({ campus }: { campus: CampusLevel }) {
                       <span className="text-slate-500 truncate">{getDisciplineShortName(vid.disciplineId)}</span>
                     </div>
 
-                    <h3 className="font-display text-base sm:text-lg font-bold text-slate-900">{vid.title}</h3>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenPlayer(vid)}
+                      className="flex items-start gap-2.5 text-left group w-full"
+                    >
+                      <span className="mt-0.5 w-6 h-6 rounded-full bg-emerald-50 border border-emerald-200 text-[#0B3321] group-hover:bg-[#0B3321] group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
+                        <Play className="w-3 h-3 fill-current ml-0.5" />
+                      </span>
+                      <h3 className="font-display text-base sm:text-lg font-bold text-slate-900 group-hover:text-[#0B3321] transition-colors">
+                        {vid.title}
+                      </h3>
+                    </button>
                     {vid.editalTopic && (
                       <p className="text-xs text-slate-600">
                         <span className="font-semibold text-slate-700">Assunto: </span>
