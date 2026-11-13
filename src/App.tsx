@@ -9,6 +9,7 @@ import {
   Headphones,
   Home,
   LogOut,
+  Sparkles,
   Users,
   Video,
 } from 'lucide-react';
@@ -22,6 +23,7 @@ import { ErrorNotebookView } from './components/ErrorNotebookView';
 import { MaterialsView } from './components/MaterialsView';
 import { PodcastsView } from './components/PodcastsView';
 import { VideosView } from './components/VideosView';
+import { GeminiSummaryView, type GeminiTargetPreset } from './components/GeminiSummaryView';
 import { PerformanceView } from './components/PerformanceView';
 import { FamilyAccessView } from './components/FamilyAccessView';
 import { OfflineIndicator, PWAInstallButton } from './components/PWAInstallButton';
@@ -85,6 +87,7 @@ function CampusShell() {
   });
   const [timerPreset, setTimerPreset] = useState<{ disciplineId?: string; topicTitle?: string }>({});
   const [contentInitialScope, setContentInitialScope] = useState<LibraryScope | undefined>(undefined);
+  const [geminiPreset, setGeminiPreset] = useState<GeminiTargetPreset | null>(null);
 
   useEffect(() => {
     updateAccessPresenceContext(activeTab, selectedCampus);
@@ -143,6 +146,7 @@ function CampusShell() {
     { id: 'materials', label: 'Conteúdo' },
     { id: 'disciplines', label: 'Disciplinas' },
     { id: 'videos', label: 'Vídeos' },
+    { id: 'gemini', label: 'Gemini IA' },
     { id: 'schedule', label: 'Cronograma' },
     { id: 'simulados', label: 'Simulados' },
     { id: 'revisions', label: 'Revisões' },
@@ -154,6 +158,7 @@ function CampusShell() {
     { id: 'dashboard', label: 'Início', icon: Home },
     { id: 'materials', label: 'Conteúdo', icon: FileText },
     { id: 'videos', label: 'Vídeos', icon: Video },
+    { id: 'gemini', label: 'Gemini IA', icon: Sparkles },
     { id: 'disciplines', label: 'Disciplinas', icon: BookOpen },
     { id: 'schedule', label: '2h/dia', icon: CalendarDays },
     { id: 'simulados', label: 'Questões', icon: CheckSquare },
@@ -252,6 +257,7 @@ function CampusShell() {
                 {activeTab === 'revisions' && 'Revisões'}
                 {activeTab === 'podcasts' && 'Podcasts'}
                 {activeTab === 'videos' && 'Vídeos'}
+                {activeTab === 'gemini' && 'Gemini IA · Resumo de Vídeos e PDFs'}
                 {activeTab === 'materials' && 'Conteúdo & Disciplinas'}
                 {activeTab === 'performance' && 'Desempenho'}
                 {activeTab === 'family' && 'Acesso por Familiares'}
@@ -401,12 +407,31 @@ function CampusShell() {
         )}
         {activeTab === 'revisions' && <ErrorNotebookView campus={selectedCampus} />}
         {activeTab === 'podcasts' && <PodcastsView campus={selectedCampus} />}
-        {activeTab === 'videos' && <VideosView campus={selectedCampus} />}
+        {activeTab === 'videos' && (
+          <VideosView
+            campus={selectedCampus}
+            onSummarizeWithGemini={(target) => {
+              setGeminiPreset(target);
+              setActiveTab('gemini');
+            }}
+          />
+        )}
+        {activeTab === 'gemini' && (
+          <GeminiSummaryView
+            campus={selectedCampus}
+            presetTarget={geminiPreset}
+            onClearPreset={() => setGeminiPreset(null)}
+          />
+        )}
         {activeTab === 'materials' && (
           <MaterialsView
             campus={selectedCampus}
             initialScope={contentInitialScope}
             onChangeCampus={handleChangeCampus}
+            onSummarizeWithGemini={(target) => {
+              setGeminiPreset(target);
+              setActiveTab('gemini');
+            }}
           />
         )}
         {activeTab === 'performance' && (

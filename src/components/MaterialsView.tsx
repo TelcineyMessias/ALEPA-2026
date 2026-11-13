@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Scale,
   Search,
+  Sparkles,
   Trash2,
   Upload,
   Video,
@@ -270,10 +271,18 @@ export function MaterialsView({
   campus,
   initialScope,
   onChangeCampus,
+  onSummarizeWithGemini,
 }: {
   campus: CampusLevel;
   initialScope?: LibraryScope;
   onChangeCampus?: (campus: CampusLevel) => void;
+  onSummarizeWithGemini?: (target: {
+    mode: 'video' | 'pdf';
+    materialId?: string;
+    url?: string;
+    title?: string;
+    disciplineId?: string;
+  }) => void;
 }) {
   const {
     materials,
@@ -1751,6 +1760,30 @@ export function MaterialsView({
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     )}
+
+                    {onSummarizeWithGemini &&
+                      (isVideoMat ||
+                        mat.fileType === 'pdf' ||
+                        mat.resourceType === 'pdf' ||
+                        mat.resourceType === 'legislacao' ||
+                        mat.resourceType === 'livro_digital') && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onSummarizeWithGemini({
+                              mode: isVideoMat ? 'video' : 'pdf',
+                              materialId: mat.id,
+                              url: mat.url,
+                              title: mat.title,
+                              disciplineId: mat.disciplineId,
+                            })
+                          }
+                          className="min-h-[40px] px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[#0B3321] text-xs font-semibold rounded-xl inline-flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-[#146C43]" />
+                          <span>Resumo Gemini</span>
+                        </button>
+                      )}
                   </div>
 
                   {canDelete && (

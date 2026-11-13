@@ -78,6 +78,7 @@ const TAB_LABELS: Record<string, string> = {
   revisions: 'Revisões',
   podcasts: 'Podcasts',
   videos: 'Vídeos',
+  gemini: 'Gemini IA',
   performance: 'Desempenho',
   family: 'Familiares',
 };

@@ -13,6 +13,7 @@ import {
   Layers,
   Lightbulb,
   Play,
+  Sparkles,
   Target,
   TrendingUp,
   Users,
@@ -481,8 +482,8 @@ export function DashboardView({
           </div>
         </div>
 
-        {/* Atalhos diretos para celular e PC: Geral | Conteúdo | Vídeos | Edital | Familiares */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+        {/* Atalhos diretos para celular e PC: Geral | Conteúdo | Vídeos | Gemini IA | Edital | Familiares */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1">
           <button
             type="button"
             onClick={() => (onOpenContent ? onOpenContent('geral') : onNavigate('materials'))}
@@ -516,6 +517,17 @@ export function DashboardView({
           </button>
           <button
             type="button"
+            onClick={() => onNavigate('gemini')}
+            className="min-h-[46px] px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:border-[#0B3321] text-left transition-colors"
+          >
+            <div className="flex items-center justify-between gap-1">
+              <p className="text-xs font-bold text-[#0B3321] truncate">Gemini IA</p>
+              <Sparkles className="w-3.5 h-3.5 text-[#146C43] shrink-0" />
+            </div>
+            <p className="text-[11px] text-[#146C43] font-medium truncate">Resumir Vídeo & PDF</p>
+          </button>
+          <button
+            type="button"
             onClick={() => onNavigate('disciplines')}
             className="min-h-[46px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:border-[#0B3321] hover:bg-emerald-50/50 text-left transition-colors"
           >
@@ -525,7 +537,7 @@ export function DashboardView({
           <button
             type="button"
             onClick={() => onNavigate('family')}
-            className="col-span-2 sm:col-span-1 min-h-[46px] px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:border-[#0B3321] text-left transition-colors"
+            className="min-h-[46px] px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:border-[#0B3321] text-left transition-colors"
           >
             <div className="flex items-center justify-between gap-1">
               <p className="text-xs font-bold text-[#0B3321] truncate">Familiares</p>

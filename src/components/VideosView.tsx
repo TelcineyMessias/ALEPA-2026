@@ -7,6 +7,7 @@ import {
   Lock,
   Play,
   Plus,
+  Sparkles,
   Trash2,
   Video,
   X,
@@ -220,7 +221,19 @@ function PlatformIcon({ platform, className = 'w-4 h-4' }: { platform: VideoPlat
   return <Video className={`${className} text-emerald-700 shrink-0`} />;
 }
 
-export function VideosView({ campus }: { campus: CampusLevel }) {
+export function VideosView({
+  campus,
+  onSummarizeWithGemini,
+}: {
+  campus: CampusLevel;
+  onSummarizeWithGemini?: (target: {
+    mode: 'video';
+    materialId?: string;
+    url?: string;
+    title?: string;
+    disciplineId?: string;
+  }) => void;
+}) {
   const { materials, addMaterial, deleteMaterial, user, profile, isAdmin, canPublishShared, loginWithGoogle } =
     useAuth();
 
@@ -948,6 +961,25 @@ export function VideosView({ campus }: { campus: CampusLevel }) {
                         <span>Abrir link</span>
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
+
+                      {onSummarizeWithGemini && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onSummarizeWithGemini({
+                              mode: 'video',
+                              materialId: vid.id,
+                              url: vid.url,
+                              title: vid.title,
+                              disciplineId: vid.disciplineId,
+                            })
+                          }
+                          className="min-h-[38px] px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[#0B3321] text-xs font-semibold rounded-xl inline-flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-[#146C43]" />
+                          <span>Resumir no Gemini</span>
+                        </button>
+                      )}
                     </div>
 
                     {canDelete && (

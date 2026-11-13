@@ -12,6 +12,7 @@ export type NavSection =
   | 'revisions'
   | 'podcasts'
   | 'videos'
+  | 'gemini'
   | 'materials'
   | 'performance'
   | 'family';
